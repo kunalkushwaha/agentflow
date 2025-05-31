@@ -3397,5 +3397,3 @@ func main() {
     }
 }
 ```
-
-This completes the first 6 of the 8 requested documentation sections. Would you like me to continue with sections 7 and 8?
