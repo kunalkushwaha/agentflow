@@ -1150,6 +1150,430 @@ if err != nil {
 
 ---
 
+## MCP Integration (Model Context Protocol)
+
+AgentFlow provides comprehensive support for Model Context Protocol (MCP), enabling seamless integration with MCP servers and tools. MCP allows agents to access external tools and resources in a standardized way.
+
+### Overview
+
+MCP integration in AgentFlow includes:
+- **Automatic server discovery and connection**
+- **Dynamic tool registration from MCP servers**
+- **Tool invocation with proper context management**
+- **Health monitoring and connection management**
+- **Graceful error handling and fallbacks**
+
+### Quick MCP Setup
+
+The simplest way to get started with MCP is using the QuickStart API:
+
+```go
+import "github.com/kunalkushwaha/agentflow/core"
+
+// Create MCP integration with mock server (simplest approach)
+mcpManager, err := core.NewQuickStart().WithMockServer()
+if err != nil {
+    log.Fatal("Failed to initialize MCP manager:", err)
+}
+}
+
+// Add custom MCP servers
+serverConfig := core.MCPServerConfig{
+    ID:         "filesystem-server",
+    Name:       "File System MCP Server",
+    Type:       "stdio",
+    ClientType: "mark3labs",
+    Enabled:    true,
+    Connection: core.MCPConnectionConfig{
+        Transport: "stdio",
+        Command:   []string{"python", "filesystem_server.py"},
+    },
+    Timeout: 30000, // 30 seconds
+}
+
+err = mcpManager.AddServer(serverConfig)
+if err != nil {
+    log.Fatal("Failed to add MCP server:", err)
+}
+
+// Get tool registry for use with agents
+toolRegistry := mcpManager.GetTools()
+```
+
+### Configuration-Based Setup
+
+For production deployments, create MCP manager from TOML configuration:
+
+```go
+// Load MCP configuration from file
+mcpManager, err := core.NewMCPManagerFromConfig("mcp_config.toml")
+if err != nil {
+    log.Fatal("Failed to create MCP manager from config:", err)
+}
+
+// Refresh tools to discover all available MCP tools
+ctx := context.Background()
+err = mcpManager.RefreshTools(ctx)
+if err != nil {
+    log.Warn("Failed to refresh MCP tools:", err)
+}
+```
+
+**Example MCP Configuration File (mcp_config.toml):**
+```toml
+[mcp]
+client_type = "mark3labs"
+health_check = true
+auto_discovery = true
+
+[[mcp.servers]]
+id = "filesystem"
+name = "File System Server"
+type = "stdio"
+enabled = true
+timeout = 30000
+
+[mcp.servers.connection]
+transport = "stdio"
+command = ["python", "filesystem_server.py"]
+working_directory = "/path/to/server"
+
+[[mcp.servers]]
+id = "web-search"
+name = "Web Search Server"
+type = "http"
+enabled = true
+timeout = 10000
+
+[mcp.servers.connection]
+transport = "http"
+endpoint = "http://localhost:8080/mcp"
+```
+
+### Manual MCP Setup
+
+For fine-grained control, configure MCP manually using the builder pattern:
+
+```go
+import (
+    "github.com/kunalkushwaha/agentflow/core"
+    "context"
+)
+
+func setupMCPWithBuilder() (*core.MCPManager, error) {
+    // Create MCP manager using builder pattern
+    mcpManager, err := core.NewMCPBuilder().
+        WithClientType("mark3labs").
+        WithHealthCheck(true).
+        WithAutoDiscovery(true).
+        AddMockServer("test-server", "Test MCP Server").
+        AddStdioServer("fs-server", "Filesystem Server", []string{"python", "fs_server.py"}).
+        AddHTTPServer("api-server", "API Server", "http://localhost:8080/mcp").
+        Build()
+    
+    if err != nil {
+        return nil, err
+    }
+    
+    // Refresh tools in the background
+    go func() {
+        ctx := context.Background()
+        if err := mcpManager.RefreshTools(ctx); err != nil {
+            log.Printf("Warning: Failed to refresh MCP tools: %v", err)
+        }
+    }()
+    
+    return mcpManager, nil
+}
+
+// Use with AgentFlow runners
+func createMCPEnabledRunner() *core.Runner {
+    mcpManager, err := setupMCPWithBuilder()
+    if err != nil {
+        log.Fatal("Failed to setup MCP:", err)
+    }
+    
+    // Get tool registry for agents
+    toolRegistry := mcpManager.GetTools()
+    
+    // Create agents with MCP tool access
+    agents := map[string]core.AgentHandler{
+        "mcp-agent": NewMCPEnabledAgent(toolRegistry),
+    }
+    
+    return core.NewRunnerFromWorkingDir(agents)
+}
+```
+
+### Using MCP Tools in Agents
+
+Once MCP is configured, agents can access tools through the ToolRegistry interface:
+
+```go
+type MCPEnabledAgent struct {
+    mcpManager *core.MCPManager
+}
+
+func (a *MCPEnabledAgent) Run(ctx context.Context, event agentflow.Event, state agentflow.State) (agentflow.AgentResult, error) {
+    startTime := time.Now()
+    
+    // Get the tool registry from MCP manager
+    toolRegistry := a.mcpManager.GetTools()
+    
+    // Check if filesystem tool is available
+    if toolRegistry.HasTool("filesystem_read") {
+        result, err := toolRegistry.CallTool(ctx, "filesystem_read", map[string]any{
+            "path": "/documents/data.txt",
+        })
+        if err != nil {
+            return agentflow.AgentResult{}, fmt.Errorf("filesystem tool failed: %w", err)
+        }
+        
+        // Process file content
+        if content, ok := result["content"].(string); ok {
+            state.Set("file_content", content)
+        }
+    }
+    
+    // Use web search tool from MCP server
+    if toolRegistry.HasTool("web_search") {
+        searchResult, err := toolRegistry.CallTool(ctx, "web_search", map[string]any{
+            "query": "AgentFlow framework documentation",
+            "limit": 5,
+        })
+        if err != nil {
+            // Graceful fallback - continue without search results
+            state.Set("search_unavailable", true)
+        } else {
+            if results, ok := searchResult["results"].([]interface{}); ok {
+                state.Set("search_results", results)
+            }
+        }
+    }
+    
+    return agentflow.AgentResult{
+        OutputState: state,
+        StartTime:   startTime,
+        EndTime:     time.Now(),
+        Duration:    time.Since(startTime),
+    }, nil
+}
+```
+
+### MCP Tool Discovery and Registration
+
+AgentFlow automatically discovers and registers tools from configured MCP servers:
+
+```go
+// Initialize MCP manager with servers
+mcpManager, err := core.NewMCPManagerFromConfig("mcp-config.toml")
+if err != nil {
+    log.Fatal("Failed to initialize MCP:", err)
+}
+
+// Get the tool registry
+toolRegistry := mcpManager.GetTools()
+
+// List all available tools (includes MCP tools)
+availableTools := toolRegistry.List()
+fmt.Printf("Available tools: %v\n", availableTools)
+
+// Check for specific tools
+for _, toolName := range []string{"filesystem_read", "web_search", "database_query"} {
+    if toolRegistry.HasTool(toolName) {
+        fmt.Printf("✓ Tool available: %s\n", toolName)
+    } else {
+        fmt.Printf("✗ Tool not available: %s\n", toolName)
+    }
+}
+
+// Get information about MCP servers and their tools
+servers := mcpManager.ListServers()
+for _, server := range servers {
+    fmt.Printf("Server: %s (%s) - %d tools\n", server.Name, server.Status, server.ToolCount)
+}
+
+// Get detailed tool information
+tools := mcpManager.ListTools()
+for _, tool := range tools {
+    fmt.Printf("Tool: %s from server %s\n", tool.Name, tool.ServerID)
+    fmt.Printf("  Description: %s\n", tool.Description)
+    fmt.Printf("  Schema: %+v\n", tool.InputSchema)
+}
+```
+
+### Error Handling and Fallbacks
+
+MCP integration includes robust error handling:
+
+```go
+type ResilientMCPAgent struct {
+    mcpManager   *agentflow.MCPManager
+    fallbackData map[string]interface{}
+}
+
+func (a *ResilientMCPAgent) Run(ctx context.Context, event agentflow.Event, state agentflow.State) (agentflow.AgentResult, error) {
+    startTime := time.Now()
+      // Get tool registry from MCP manager
+    toolRegistry := a.mcpManager.GetTools()
+    
+    // Attempt to use MCP tool with timeout
+    ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+    defer cancel()
+    
+    if toolRegistry.HasTool("web_search") {
+        result, err := toolRegistry.CallTool(ctx, "web_search", map[string]any{
+            "query": "latest news",
+        })
+        
+        if err != nil {
+            // Log error and use fallback
+            log.Warn().Err(err).Msg("MCP web search failed, using fallback")
+            state.Set("search_results", a.fallbackData["default_news"])
+            state.Set("data_source", "fallback")
+        } else {
+            if results, ok := result["results"]; ok {
+                state.Set("search_results", results)
+                state.Set("data_source", "mcp_web_search")
+            }
+        }
+    } else {
+        // Tool not available - use alternative approach
+        state.Set("search_results", a.fallbackData["default_news"])
+        state.Set("data_source", "static_fallback")
+    }
+    
+    return agentflow.AgentResult{
+        OutputState: state,
+        StartTime:   startTime,
+        EndTime:     time.Now(),
+        Duration:    time.Since(startTime),
+    }, nil
+}
+```
+
+### MCP Health Monitoring
+
+Monitor MCP server health and connection status:
+
+```go
+// Check MCP server health
+healthStatus := mcpManager.HealthCheck(ctx)
+for serverID, status := range healthStatus {
+    fmt.Printf("Server %s: %s\n", serverID, status)
+}
+
+// Get detailed server information
+servers := mcpManager.ListServers()
+for _, server := range servers {
+    if server.Status == "connected" {
+        fmt.Printf("✅ MCP Server '%s' is healthy\n", server.Name)
+        fmt.Printf("   Tools available: %d\n", server.ToolCount)
+        if server.LastSeen != nil {
+            fmt.Printf("   Last seen: %s\n", server.LastSeen.Format(time.RFC3339))
+        }
+    } else {
+        fmt.Printf("❌ MCP Server '%s' status: %s\n", server.Name, server.Status)
+    }
+}
+
+// List available tools from all servers
+tools := mcpManager.ListTools()
+fmt.Printf("Total available MCP tools: %d\n", len(tools))
+for _, tool := range tools {
+    fmt.Printf("  - %s (from %s): %s\n", tool.Name, tool.ServerID, tool.Description)
+}
+
+// Register health check callbacks
+mcpManager.OnServerHealthChange(func(serverName string, healthy bool, err error) {
+    if healthy {
+        agentflow.Logger().Info().Str("server", serverName).Msg("MCP server recovered")
+    } else {
+        agentflow.Logger().Error().Err(err).Str("server", serverName).Msg("MCP server unhealthy")
+    }
+})
+```
+
+### MCP Configuration Best Practices
+
+#### 1. Environment-Based Configuration
+```toml
+# development.toml
+[[mcp.servers]]
+name = "filesystem"
+command = "node"
+args = ["dev-filesystem-server.js"]
+env = { NODE_ENV = "development" }
+
+# production.toml  
+[[mcp.servers]]
+name = "filesystem"
+command = "node"
+args = ["filesystem-server.js"]
+env = { NODE_ENV = "production", LOG_LEVEL = "warn" }
+```
+
+#### 2. Graceful Degradation
+```go
+// Always implement fallbacks for MCP tools
+func (a *Agent) executeWithFallback(toolName string, params map[string]interface{}) (interface{}, error) {
+    if a.toolRegistry.HasTool(toolName) {
+        result, err := a.toolRegistry.CallTool(ctx, toolName, params)
+        if err == nil {
+            return result, nil
+        }
+        // Log MCP tool failure but continue
+        log.Warn().Err(err).Str("tool", toolName).Msg("MCP tool failed, using fallback")
+    }
+    
+    // Implement fallback logic
+    return a.executeFallback(toolName, params)
+}
+```
+
+#### 3. Tool Selection Strategy
+```go
+// Prefer MCP tools when available, fallback to built-in tools
+func (a *Agent) selectBestTool(capability string) core.Tool {
+    // Try MCP tools first (more capable)
+    mcpTools := a.toolRegistry.GetToolsByCategory("mcp")
+    for _, tool := range mcpTools {
+        if tool.Supports(capability) {
+            return tool
+        }
+    }
+    
+    // Fallback to built-in tools
+    builtinTools := a.toolRegistry.GetToolsByCategory("builtin")
+    for _, tool := range builtinTools {
+        if tool.Supports(capability) {
+            return tool
+        }
+    }
+    
+    return nil
+}
+```
+
+### MCP Integration with Generated Projects
+
+When using `agentcli create`, you can enable MCP support:
+
+```bash
+# Create project with MCP support
+agentcli create my-mcp-project --with-mcp --mcp-servers filesystem,web-search
+
+# Generated agentflow.toml will include MCP configuration
+```
+
+The generated project includes:
+- **Pre-configured MCP servers** based on your selection
+- **MCP-aware agent implementations** with fallback patterns
+- **Health monitoring and error handling** for MCP tools
+- **Configuration examples** for common MCP server types
+
+---
+
 ## Getting Started
 
 ### Setting Up the Runner (Manual Setup)

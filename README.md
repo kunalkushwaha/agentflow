@@ -24,6 +24,7 @@ Whether you're prototyping a single-agent application or orchestrating a complex
 - **Deterministic Workflow Agents**: Build pipelines with SequentialAgent, ParallelAgent, and LoopAgent.
 - **LLM Integration**: Abstract any LLM backend via unified ModelProvider interface (Azure OpenAI, OpenAI, Ollama).
 - **Tool Ecosystem**: Extend agent capabilities with function tool registry.
+- **🆕 MCP Integration**: Full support for Model Context Protocol (MCP) servers - seamlessly integrate external tools and capabilities.
 - **Observability**: Comprehensive tracing and callback hooks at key lifecycle points.
 - **Memory Management**: Both short-term session storage and long-term vector-based memory.
 - **Project Scaffolding**: Built-in `agentcli create` command generates production-ready multi-agent projects with modern patterns.
@@ -285,9 +286,133 @@ For external projects, use:
 import agentflow "github.com/kunalkushwaha/agentflow/core"
 ```
 
+## MCP (Model Context Protocol) Integration 🆕
+
+AgentFlow now includes **full support** for Model Context Protocol (MCP), enabling seamless integration with external tools and capabilities through standardized servers.
+
+### What is MCP?
+
+The Model Context Protocol allows AI systems to securely connect to external data sources and tools, providing enhanced context and capabilities. AgentFlow's MCP integration enables your agents to:
+
+- **Connect to External Tools**: Access file systems, databases, APIs, and more
+- **Dynamic Tool Discovery**: Automatically discover and register tools from MCP servers
+- **Transparent Integration**: Use MCP tools just like native tools - no code changes needed
+- **Multiple Servers**: Connect to multiple MCP servers simultaneously
+- **Health Monitoring**: Automatic health checking and reconnection
+
+### Quick MCP Example
+
+```go
+package main
+
+import (
+    "context"
+    "github.com/kunalkushwaha/agentflow/internal/mcp"
+    "github.com/kunalkushwaha/agentflow/internal/tools"
+)
+
+func main() {
+    // Create MCP integration with mock server
+    config := mcp.MCPIntegrationConfig{
+        ClientType:    "mock",
+        HealthCheck:   true,
+        AutoDiscovery: false,
+    }
+    
+    mcpIntegration, err := mcp.NewMCPIntegration(config)
+    if err != nil {
+        panic(err)
+    }
+    defer mcpIntegration.Shutdown(context.Background())
+
+    // Register with AgentFlow tool registry
+    toolRegistry := tools.NewToolRegistry()
+    err = mcpIntegration.RegisterWithAgentFlow(toolRegistry)
+    if err != nil {
+        panic(err)
+    }
+    
+    // MCP tools are now available through the tool registry!
+}
+```
+
+### MCP Configuration
+
+Configure MCP servers in separate MCP configuration files:
+
+```toml
+# mcp-config.toml
+[mcp]
+enabled = true
+default_client = "mark3labs"
+health_check = true
+auto_discovery = false
+
+[mcp.servers.filesystem]
+name = "File System Server"
+type = "stdio"
+client_type = "mark3labs"
+enabled = true
+timeout = 30000
+
+[mcp.servers.filesystem.transport]
+type = "stdio"
+command = "python"
+args = ["-m", "mcp_server_filesystem", "/workspace"]
+
+[mcp.servers.web_search]
+name = "Web Search Server"  
+type = "http"
+client_type = "mark3labs"
+enabled = true
+
+[mcp.servers.web_search.transport]
+type = "http"
+address = "localhost"
+port = 8080
+path = "/mcp"
+```
+
+### MCP Features
+
+- **🔌 Easy Setup**: One-line initialization with sensible defaults
+- **🔄 Auto-Discovery**: Automatic tool discovery and registration
+- **💪 Multiple Servers**: Support for multiple concurrent MCP servers
+- **🏥 Health Monitoring**: Built-in health checking and recovery
+- **⚙️ Flexible Configuration**: Support for stdio, HTTP, and WebSocket transports
+- **🔧 Tool Management**: Transparent integration with AgentFlow's tool registry
+- **📊 Observability**: Full tracing and monitoring support
+
+### Public MCP APIs
+
+AgentFlow provides clean public APIs for MCP integration:
+
+```go
+// Integration-based patterns
+config := mcp.MCPIntegrationConfig{
+    ClientType:    "mock",
+    HealthCheck:   true,
+    AutoDiscovery: false,
+}
+mcpIntegration, _ := mcp.NewMCPIntegration(config)
+
+// Configuration-based setup
+toolRegistry := tools.NewToolRegistry()
+mcpIntegration, _ := mcp.NewMCPIntegrationFromConfig(toolRegistry, "mcp-config.toml")
+
+// Factory methods for MCP managers
+factory := core.NewMCPFactory()
+mcpManager, _ := factory.CreateMockMCPManager()
+mcpManager, _ := factory.CreateProductionMCPManager("mark3labs")
+```
+
+For more details, see the [MCP Integration Guide](docs/MCP_INTEGRATION.md).
+
 ## Documentation
 
 - [Developer Guide](docs/DevGuide.md): Comprehensive guide to using the framework.
+- [Library Usage Guide](docs/LibraryUsageGuide.md): Best practices for using AgentFlow as a library.
+- [MCP Integration Guide](docs/MCP_INTEGRATION.md): Complete guide to Model Context Protocol integration.
 - [Tracing Guide](docs/TracingGuide.md): Details on the tracing system.
 - [Architecture Overview](docs/Architecture.md): High-level architecture overview.
 - [Project Roadmap](docs/ROADMAP.md): Development timeline and upcoming features.

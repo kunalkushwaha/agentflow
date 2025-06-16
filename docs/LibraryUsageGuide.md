@@ -2,7 +2,7 @@
 
 ## Overview
 
-AgentFlow is now available as a fully-featured Go library that you can import and use in your own projects. This guide provides comprehensive examples and best practices for using AgentFlow as an external dependency.
+AgentFlow is now available as a fully-featured Go library that you can import and use in your own projects. This guide provides comprehensive examples and best practices for using AgentFlow as an external dependency, including detailed coverage of MCP (Model Context Protocol) integration for enhanced tool capabilities.
 
 ## Installation
 
@@ -521,9 +521,434 @@ func concurrentProcessing(runner *agentflow.Runner) {
             }
         }(i)
     }
-    
-    wg.Wait()
+      wg.Wait()
     fmt.Println("All concurrent events emitted")
+}
+```
+
+## MCP Integration (Model Context Protocol)
+
+AgentFlow's MCP integration allows your library-based applications to leverage external tools and services through the Model Context Protocol. This section covers practical patterns for integrating MCP into your projects.
+
+### Quick MCP Setup for Libraries
+
+The simplest way to add MCP support to your library-based AgentFlow project:
+
+```go
+package main
+
+import (
+    "context"
+    "fmt"
+    "log"
+    "os"
+    
+    agentflow "github.com/kunalkushwaha/agentflow/core"
+)
+
+func main() {
+    // Quick MCP-enabled setup
+    ctx := context.Background()
+    
+    // Initialize with MCP support using environment-based configuration
+    mcpConfig := agentflow.MCPConfig{
+        Enabled: true,
+        Servers: []agentflow.MCPServerConfig{
+            {
+                Name:    "filesystem",
+                Command: "node",
+                Args:    []string{os.Getenv("MCP_FILESYSTEM_SERVER_PATH"), "./data"},
+                Env:     map[string]string{"NODE_ENV": "production"},
+            },
+        },
+    }
+    
+    // Create agents with MCP awareness
+    agents := map[string]agentflow.AgentHandler{
+        "file-processor": &FileProcessorAgent{},
+        "data-analyzer":  &DataAnalyzerAgent{},
+    }
+    
+    // Build runner with MCP support
+    runner := agentflow.NewRunnerWithConfig(agentflow.RunnerConfig{
+        Agents:     agents,
+        QueueSize:  100,
+        MCPConfig:  &mcpConfig,
+        TraceLogger: agentflow.NewInMemoryTraceLogger(),
+    })
+    
+    // Start the runner
+    if err := runner.Start(ctx); err != nil {
+        log.Fatal("Failed to start runner:", err)
+    }
+    defer runner.Stop()
+    
+    // MCP tools are now available to agents
+    fmt.Println("AgentFlow with MCP support is running...")
+}
+```
+
+### MCP-Aware Agent Implementation
+
+Create agents that can leverage MCP tools while maintaining fallback capabilities:
+
+```go
+type FileProcessorAgent struct {
+    toolRegistry agentflow.ToolRegistry
+}
+
+func (a *FileProcessorAgent) Run(ctx context.Context, event agentflow.Event, state agentflow.State) (agentflow.AgentResult, error) {
+    startTime := time.Now()
+    
+    // Extract file path from event
+    eventData := event.GetData()
+    filePath, ok := eventData["file_path"].(string)
+    if !ok {
+        return agentflow.AgentResult{}, fmt.Errorf("file_path not provided")
+    }
+      // Try to use MCP filesystem tool first
+    var fileContent string
+    var dataSource string
+    
+    if a.toolRegistry.HasTool("filesystem_read_file") {
+        result, err := a.toolRegistry.CallTool(ctx, "filesystem_read_file", map[string]any{
+            "path": filePath,
+        })
+        
+        if err != nil {
+            // MCP tool failed - log and use fallback
+            log.Printf("MCP filesystem tool failed: %v, using fallback", err)
+            fileContent, err = a.readFileDirectly(filePath)
+            if err != nil {
+                return agentflow.AgentResult{}, fmt.Errorf("both MCP and fallback failed: %w", err)
+            }
+            dataSource = "fallback_direct_read"
+        } else {
+            fileContent = result["content"].(string)
+            dataSource = "mcp_filesystem"
+        }
+    } else {
+        // MCP tool not available - use direct fallback
+        var err error
+        fileContent, err = a.readFileDirectly(filePath)
+        if err != nil {
+            return agentflow.AgentResult{}, fmt.Errorf("file read failed: %w", err)
+        }
+        dataSource = "direct_read"
+    }
+    
+    // Process file content
+    processedData := a.processContent(fileContent)
+    
+    // Update state with results
+    outputState := state.Clone()
+    outputState.Set("file_content", fileContent)
+    outputState.Set("processed_data", processedData)
+    outputState.Set("data_source", dataSource)
+    outputState.Set("file_path", filePath)
+    
+    return agentflow.AgentResult{
+        OutputState: outputState,
+        StartTime:   startTime,
+        EndTime:     time.Now(),
+        Duration:    time.Since(startTime),
+    }, nil
+}
+
+func (a *FileProcessorAgent) readFileDirectly(path string) (string, error) {
+    // Fallback implementation
+    data, err := os.ReadFile(path)
+    if err != nil {
+        return "", err
+    }
+    return string(data), nil
+}
+
+func (a *FileProcessorAgent) processContent(content string) map[string]interface{} {
+    // Your content processing logic
+    return map[string]interface{}{
+        "word_count": len(strings.Fields(content)),
+        "char_count": len(content),
+        "lines":      len(strings.Split(content, "\n")),
+    }
+}
+```
+
+### Library Integration Patterns
+
+#### Pattern 1: Configuration-Driven MCP Setup
+
+Create a configuration system for your library users:
+
+```go
+// config.go - Your library's configuration
+type AppConfig struct {
+    AgentFlow *AgentFlowConfig `toml:"agentflow"`
+    MCP       *MCPConfig       `toml:"mcp"`
+}
+
+type AgentFlowConfig struct {
+    QueueSize   int    `toml:"queue_size"`
+    LogLevel    string `toml:"log_level"`
+    TraceToFile bool   `toml:"trace_to_file"`
+}
+
+type MCPConfig struct {
+    Enabled bool                `toml:"enabled"`
+    Servers []MCPServerConfig   `toml:"servers"`
+}
+
+type MCPServerConfig struct {
+    Name    string            `toml:"name"`
+    Command string            `toml:"command"`
+    Args    []string          `toml:"args"`
+    Env     map[string]string `toml:"env"`
+}
+
+// Initialize AgentFlow with user configuration
+func NewAgentFlowFromConfig(configPath string) (*agentflow.Runner, error) {
+    var config AppConfig
+    if _, err := toml.DecodeFile(configPath, &config); err != nil {
+        return nil, fmt.Errorf("failed to load config: %w", err)
+    }
+    
+    // Convert to AgentFlow configuration
+    mcpConfig := &agentflow.MCPConfig{
+        Enabled: config.MCP.Enabled,
+        Servers: make([]agentflow.MCPServerConfig, len(config.MCP.Servers)),
+    }
+    
+    for i, server := range config.MCP.Servers {
+        mcpConfig.Servers[i] = agentflow.MCPServerConfig{
+            Name:    server.Name,
+            Command: server.Command,
+            Args:    server.Args,
+            Env:     server.Env,
+        }
+    }
+    
+    // Create agents for your application
+    agents := createApplicationAgents()
+    
+    runnerConfig := agentflow.RunnerConfig{
+        Agents:    agents,
+        QueueSize: config.AgentFlow.QueueSize,
+        MCPConfig: mcpConfig,
+    }
+    
+    if config.AgentFlow.TraceToFile {
+        runnerConfig.TraceLogger = agentflow.NewFileTraceLogger("./traces")
+    } else {
+        runnerConfig.TraceLogger = agentflow.NewInMemoryTraceLogger()
+    }
+    
+    return agentflow.NewRunnerWithConfig(runnerConfig), nil
+}
+```
+
+Users can then configure your library with:
+
+```toml
+# app.toml - User configuration
+[agentflow]
+queue_size = 100
+log_level = "info"
+trace_to_file = true
+
+[mcp]
+enabled = true
+
+[[mcp.servers]]
+name = "filesystem"
+command = "node"
+args = ["filesystem-server.js", "/home/user/documents"]
+env = { NODE_ENV = "production" }
+
+[[mcp.servers]]
+name = "web-search"
+command = "python"
+args = ["-m", "web_search_server"]
+env = { SEARCH_API_KEY = "${SEARCH_API_KEY}" }
+```
+
+#### Pattern 2: Tool Registry Abstraction
+
+Provide a clean interface for your library users to access MCP tools:
+
+```go
+// Your library's tool interface
+type ToolProvider interface {
+    GetTool(name string) Tool
+    ListAvailableTools() []string
+    IsToolAvailable(name string) bool
+}
+
+type Tool interface {
+    Execute(ctx context.Context, params map[string]interface{}) (map[string]interface{}, error)
+    Description() string
+    Schema() map[string]interface{}
+}
+
+// Implementation that wraps AgentFlow's MCP tools
+type AgentFlowToolProvider struct {
+    registry agentflow.ToolRegistry
+}
+
+func (p *AgentFlowToolProvider) GetTool(name string) Tool {
+    return &ToolWrapper{tool: p.registry.GetTool(name)}
+}
+
+func (p *AgentFlowToolProvider) ListAvailableTools() []string {
+    return p.registry.ListTools()
+}
+
+func (p *AgentFlowToolProvider) IsToolAvailable(name string) bool {
+    return p.registry.GetTool(name) != nil
+}
+
+// Your library's public API
+func (app *YourApp) GetToolProvider() ToolProvider {
+    return &AgentFlowToolProvider{
+        registry: app.agentFlowRunner.ToolRegistry(),
+    }
+}
+```
+
+#### Pattern 3: Health Monitoring Integration
+
+Integrate MCP health monitoring into your application's health checks:
+
+```go
+type HealthChecker struct {
+    runner agentflow.Runner
+}
+
+func (h *HealthChecker) CheckHealth() map[string]interface{} {
+    health := map[string]interface{}{
+        "status":    "healthy",
+        "timestamp": time.Now().Unix(),
+        "checks":    make(map[string]interface{}),
+    }
+    
+    // Check AgentFlow runner health
+    if h.runner == nil {
+        health["status"] = "unhealthy"
+        health["checks"]["agentflow"] = map[string]interface{}{
+            "status": "down",
+            "error":  "runner not initialized",
+        }
+        return health
+    }
+    
+    health["checks"]["agentflow"] = map[string]interface{}{
+        "status": "up",
+    }
+    
+    // Check MCP server health if available
+    if mcpManager := h.runner.MCPManager(); mcpManager != nil {
+        mcpHealth := map[string]interface{}{}
+        serverStatus := mcpManager.GetServerStatus()
+        
+        allHealthy := true
+        for serverName, status := range serverStatus {
+            serverHealth := map[string]interface{}{
+                "healthy":    status.Healthy,
+                "tools":      len(status.AvailableTools),
+                "last_check": status.LastHealthCheck.Unix(),
+            }
+            
+            if !status.Healthy {
+                serverHealth["error"] = status.Error
+                allHealthy = false
+            }
+            
+            mcpHealth[serverName] = serverHealth
+        }
+        
+        health["checks"]["mcp"] = map[string]interface{}{
+            "status":  map[bool]string{true: "up", false: "degraded"}[allHealthy],
+            "servers": mcpHealth,
+        }
+        
+        if !allHealthy {
+            health["status"] = "degraded"
+        }
+    }
+    
+    return health
+}
+```
+
+### Performance Considerations for Library Usage
+
+When using MCP in library contexts, consider these performance optimizations:
+
+#### 1. Tool Caching
+```go
+type CachedToolProvider struct {
+    provider    ToolProvider
+    cache       map[string]CachedResult
+    cacheTTL    time.Duration
+    mu          sync.RWMutex
+}
+
+func (c *CachedToolProvider) Execute(toolName string, params map[string]interface{}) (map[string]interface{}, error) {
+    // Check cache first for idempotent operations
+    if result := c.getCachedResult(toolName, params); result != nil {
+        return result.Data, nil
+    }
+    
+    // Execute tool and cache result
+    result, err := c.provider.GetTool(toolName).Execute(ctx, params)
+    if err != nil {
+        return nil, err
+    }
+    
+    c.cacheResult(toolName, params, result)
+    return result, nil
+}
+```
+
+#### 2. Connection Pooling
+```go
+// Pre-warm MCP connections at startup
+func (app *YourApp) warmupMCPConnections(ctx context.Context) error {
+    if mcpManager := app.runner.MCPManager(); mcpManager != nil {
+        // Test all configured servers
+        servers := mcpManager.ListServers()
+        for _, serverName := range servers {
+            if err := mcpManager.PingServer(ctx, serverName); err != nil {
+                log.Printf("Warning: MCP server %s not responding: %v", serverName, err)
+            }
+        }
+    }
+    return nil
+}
+```
+
+#### 3. Graceful Degradation
+```go
+type ResilientService struct {
+    toolProvider ToolProvider
+    fallbacks    map[string]func(map[string]interface{}) (map[string]interface{}, error)
+}
+
+func (s *ResilientService) ProcessData(data interface{}) (interface{}, error) {
+    // Try MCP tool first
+    if tool := s.toolProvider.GetTool("data_processor"); tool != nil {
+        result, err := tool.Execute(ctx, map[string]interface{}{"data": data})
+        if err == nil {
+            return result, nil
+        }
+        log.Printf("MCP tool failed: %v, using fallback", err)
+    }
+    
+    // Use fallback implementation
+    if fallback, exists := s.fallbacks["data_processor"]; exists {
+        return fallback(map[string]interface{}{"data": data})
+    }
+    
+    return nil, fmt.Errorf("no processing method available")
 }
 ```
 
@@ -880,8 +1305,308 @@ func TestAgentWorkflow(t *testing.T) {
     // Wait and verify traces
     time.Sleep(100 * time.Millisecond)
     traces, err := runner.DumpTrace(sessionID)
+    require.NoError(t, err)    require.Greater(t, len(traces), 0)
+}
+```
+
+### 7. MCP Integration Best Practices
+
+When using MCP (Model Context Protocol) in your library-based AgentFlow applications, follow these best practices:
+
+#### Tool Selection and Fallbacks
+```go
+// Always implement fallback strategies for MCP tools
+type MCPAwareAgent struct {
+    toolRegistry agentflow.ToolRegistry
+    fallbackImpl map[string]func(context.Context, map[string]interface{}) (map[string]interface{}, error)
+}
+
+func (a *MCPAwareAgent) executeWithFallback(ctx context.Context, toolName string, params map[string]interface{}) (map[string]interface{}, error) {
+    // Try MCP tool first
+    if tool := a.toolRegistry.GetTool(toolName); tool != nil {
+        result, err := tool.Execute(ctx, params)
+        if err == nil {
+            return result, nil
+        }
+        
+        // Log MCP failure but continue
+        agentflow.Logger().Warn().
+            Err(err).
+            Str("tool", toolName).
+            Msg("MCP tool failed, using fallback")
+    }
+    
+    // Use fallback implementation
+    if fallback, exists := a.fallbackImpl[toolName]; exists {
+        return fallback(ctx, params)
+    }
+    
+    return nil, fmt.Errorf("tool %s not available and no fallback implemented", toolName)
+}
+```
+
+#### Configuration Management
+```go
+// Separate MCP configuration from core application config
+type MCPConfiguration struct {
+    Enabled              bool                      `json:"enabled"`
+    Servers              []MCPServerConfig         `json:"servers"`
+    HealthCheckInterval  time.Duration             `json:"health_check_interval"`
+    ConnectionTimeout    time.Duration             `json:"connection_timeout"`
+    FallbackBehavior     string                    `json:"fallback_behavior"` // "fail", "warn", "silent"
+}
+
+// Load configuration with validation
+func LoadMCPConfig(path string) (*MCPConfiguration, error) {
+    config := &MCPConfiguration{
+        HealthCheckInterval: 60 * time.Second,
+        ConnectionTimeout:   10 * time.Second,
+        FallbackBehavior:    "warn",
+    }
+    
+    if data, err := os.ReadFile(path); err == nil {
+        if err := json.Unmarshal(data, config); err != nil {
+            return nil, fmt.Errorf("invalid MCP configuration: %w", err)
+        }
+    }
+    
+    return config, nil
+}
+```
+
+#### Health Monitoring Integration
+```go
+// Monitor MCP server health and adapt behavior
+type MCPHealthMonitor struct {
+    mcpManager   agentflow.MCPManager
+    healthStatus map[string]bool
+    mu          sync.RWMutex
+}
+
+func (m *MCPHealthMonitor) StartHealthChecks(ctx context.Context) {
+    ticker := time.NewTicker(30 * time.Second)
+    defer ticker.Stop()
+    
+    for {
+        select {
+        case <-ctx.Done():
+            return
+        case <-ticker.C:
+            m.checkServerHealth(ctx)
+        }
+    }
+}
+
+func (m *MCPHealthMonitor) checkServerHealth(ctx context.Context) {
+    servers := m.mcpManager.ListServers()
+    
+    m.mu.Lock()
+    defer m.mu.Unlock()
+    
+    for _, serverName := range servers {
+        healthy := m.mcpManager.PingServer(ctx, serverName) == nil
+        
+        if prevHealthy, exists := m.healthStatus[serverName]; exists && prevHealthy != healthy {
+            // Health status changed
+            agentflow.Logger().Info().
+                Str("server", serverName).
+                Bool("healthy", healthy).
+                Msg("MCP server health status changed")
+        }
+        
+        m.healthStatus[serverName] = healthy
+    }
+}
+
+func (m *MCPHealthMonitor) IsServerHealthy(serverName string) bool {
+    m.mu.RLock()
+    defer m.mu.RUnlock()
+    return m.healthStatus[serverName]
+}
+```
+
+#### Error Handling Patterns
+```go
+// Comprehensive error handling for MCP operations
+func (a *MCPAwareAgent) processWithMCP(ctx context.Context, toolName string, params map[string]interface{}) (map[string]interface{}, error) {
+    // Set timeout for MCP operations
+    ctx, cancel := context.WithTimeout(ctx, 15*time.Second)
+    defer cancel()
+    
+    tool := a.toolRegistry.GetTool(toolName)
+    if tool == nil {
+        return a.handleMissingTool(toolName, params)
+    }
+    
+    result, err := tool.Execute(ctx, params)
+    
+    switch {
+    case err == nil:
+        // Success - log for monitoring
+        agentflow.Logger().Debug().
+            Str("tool", toolName).
+            Msg("MCP tool executed successfully")
+        return result, nil
+        
+    case errors.Is(err, context.DeadlineExceeded):
+        // Timeout - try fallback
+        agentflow.Logger().Warn().
+            Str("tool", toolName).
+            Msg("MCP tool timed out, using fallback")
+        return a.executeFallback(toolName, params)
+        
+    case isMCPConnectionError(err):
+        // Connection issue - may be temporary
+        agentflow.Logger().Error().
+            Err(err).
+            Str("tool", toolName).
+            Msg("MCP connection error, using fallback")
+        return a.executeFallback(toolName, params)
+        
+    default:
+        // Other error - depends on configuration
+        switch a.config.FallbackBehavior {
+        case "fail":
+            return nil, fmt.Errorf("MCP tool %s failed: %w", toolName, err)
+        case "warn":
+            agentflow.Logger().Warn().
+                Err(err).
+                Str("tool", toolName).
+                Msg("MCP tool failed, using fallback")
+            return a.executeFallback(toolName, params)
+        case "silent":
+            return a.executeFallback(toolName, params)
+        default:
+            return nil, fmt.Errorf("MCP tool %s failed: %w", toolName, err)
+        }
+    }
+}
+```
+
+#### Testing MCP Integration
+```go
+// Test MCP integration with mock servers
+func TestMCPIntegration(t *testing.T) {
+    // Create mock MCP server configuration
+    mockConfig := agentflow.MCPConfig{
+        Enabled: true,
+        Servers: []agentflow.MCPServerConfig{
+            {
+                Name:    "test-filesystem",
+                Command: "mock-mcp-server",
+                Args:    []string{"--type", "filesystem"},
+                Env:     map[string]string{"TEST_MODE": "true"},
+            },
+        },
+    }
+    
+    // Create test agent
+    agent := &MCPTestAgent{
+        fallbackCalled: false,
+    }
+    
+    agents := map[string]agentflow.AgentHandler{
+        "mcp-test": agent,
+    }
+    
+    // Create runner with MCP support
+    runner := agentflow.NewRunnerWithConfig(agentflow.RunnerConfig{
+        Agents:      agents,
+        QueueSize:   10,
+        MCPConfig:   &mockConfig,
+        TraceLogger: agentflow.NewInMemoryTraceLogger(),
+    })
+    
+    ctx := context.Background()
+    err := runner.Start(ctx)
     require.NoError(t, err)
-    require.Greater(t, len(traces), 0)
+    defer runner.Stop()
+    
+    // Test MCP tool availability
+    toolRegistry := runner.ToolRegistry()
+    require.NotNil(t, toolRegistry.GetTool("test-filesystem_read"))
+    
+    // Test agent execution with MCP tools
+    event := agentflow.NewEvent("test", agentflow.EventData{
+        "operation": "read_file",
+        "path":      "/test/file.txt",
+    }, map[string]string{
+        agentflow.RouteMetadataKey: "mcp-test",
+        agentflow.SessionIDKey:     "test-session",
+    })
+    
+    err = runner.Emit(event)
+    require.NoError(t, err)
+    
+    // Verify execution
+    time.Sleep(100 * time.Millisecond)
+    require.False(t, agent.fallbackCalled, "Should not have used fallback")
+}
+
+// Test fallback behavior when MCP is unavailable
+func TestMCPFallback(t *testing.T) {
+    // Create configuration with invalid MCP server
+    invalidConfig := agentflow.MCPConfig{
+        Enabled: true,
+        Servers: []agentflow.MCPServerConfig{
+            {
+                Name:    "invalid-server",
+                Command: "non-existent-command",
+                Args:    []string{},
+            },
+        },
+    }
+    
+    agent := &MCPTestAgent{
+        fallbackCalled: false,
+    }
+    
+    runner := agentflow.NewRunnerWithConfig(agentflow.RunnerConfig{
+        Agents:      map[string]agentflow.AgentHandler{"test": agent},
+        QueueSize:   10,
+        MCPConfig:   &invalidConfig,
+        TraceLogger: agentflow.NewInMemoryTraceLogger(),
+    })
+    
+    ctx := context.Background()
+    err := runner.Start(ctx)
+    require.NoError(t, err)
+    defer runner.Stop()
+    
+    // Execute with invalid MCP setup
+    event := agentflow.NewEvent("test", agentflow.EventData{
+        "operation": "read_file",
+    }, map[string]string{
+        agentflow.RouteMetadataKey: "test",
+    })
+    
+    err = runner.Emit(event)
+    require.NoError(t, err)
+    
+    time.Sleep(100 * time.Millisecond)
+    require.True(t, agent.fallbackCalled, "Should have used fallback")
+}
+
+type MCPTestAgent struct {
+    fallbackCalled bool
+}
+
+func (a *MCPTestAgent) Run(ctx context.Context, event agentflow.Event, state agentflow.State) (agentflow.AgentResult, error) {
+    // Try MCP tool, fallback if not available
+    if tool := runner.ToolRegistry().GetTool("test-filesystem_read"); tool != nil {
+        result, err := tool.Execute(ctx, map[string]interface{}{
+            "path": event.GetData()["path"],
+        })
+        if err == nil {
+            state.Set("result", result)
+            return agentflow.AgentResult{OutputState: state}, nil
+        }
+    }
+    
+    // Use fallback
+    a.fallbackCalled = true
+    state.Set("result", "fallback_data")
+    return agentflow.AgentResult{OutputState: state}, nil
 }
 ```
 
@@ -927,8 +1652,336 @@ func (a *MetricsAgent) Run(ctx context.Context, event agentflow.Event, state age
             Dur("duration", duration).
             Msg("Agent execution succeeded")
     }
+      return result, err
+}
+```
+
+### MCP Production Deployment
+
+When deploying MCP-enabled AgentFlow applications to production, consider these factors:
+
+#### 1. Server Management and Process Supervision
+
+```go
+// Production MCP configuration with supervision
+type ProductionMCPConfig struct {
+    Servers []MCPServerSpec `yaml:"servers"`
+    Global  MCPGlobalConfig `yaml:"global"`
+}
+
+type MCPServerSpec struct {
+    Name            string            `yaml:"name"`
+    Command         string            `yaml:"command"`
+    Args            []string          `yaml:"args"`
+    Env             map[string]string `yaml:"env"`
+    WorkingDir      string            `yaml:"working_dir"`
+    RestartPolicy   string            `yaml:"restart_policy"`   // "always", "on-failure", "never"
+    MaxRestarts     int               `yaml:"max_restarts"`
+    HealthCheckPath string            `yaml:"health_check_path"`
+    Timeout         time.Duration     `yaml:"timeout"`
+}
+
+type MCPGlobalConfig struct {
+    HealthCheckInterval time.Duration `yaml:"health_check_interval"`
+    ConnectionTimeout   time.Duration `yaml:"connection_timeout"`
+    MaxConnections      int           `yaml:"max_connections"`
+    LogLevel           string         `yaml:"log_level"`
+}
+
+// Production configuration example
+// mcp-production.yaml
+/*
+servers:
+  - name: "filesystem"
+    command: "node"
+    args: ["dist/filesystem-server.js"]
+    working_dir: "/opt/mcp-servers/filesystem"
+    restart_policy: "always"
+    max_restarts: 5
+    timeout: 30s
+    env:
+      NODE_ENV: "production"
+      LOG_LEVEL: "info"
+      
+  - name: "web-search"
+    command: "/usr/local/bin/web-search-server"
+    args: ["--config", "/etc/web-search/config.json"]
+    working_dir: "/opt/mcp-servers/web-search"
+    restart_policy: "on-failure"
+    max_restarts: 3
+    timeout: 15s
+    env:
+      SEARCH_API_KEY: "${SEARCH_API_KEY}"
+      RATE_LIMIT: "100"
+
+global:
+  health_check_interval: 30s
+  connection_timeout: 10s
+  max_connections: 10
+  log_level: "info"
+*/
+```
+
+#### 2. Resource Management and Monitoring
+
+```go
+// Monitor MCP server resource usage
+type MCPResourceMonitor struct {
+    processes map[string]*os.Process
+    metrics   map[string]ResourceMetrics
+    mu        sync.RWMutex
+}
+
+type ResourceMetrics struct {
+    CPU       float64
+    Memory    uint64
+    Uptime    time.Duration
+    Restarts  int
+    LastCheck time.Time
+}
+
+func (m *MCPResourceMonitor) MonitorResources(ctx context.Context) {
+    ticker := time.NewTicker(10 * time.Second)
+    defer ticker.Stop()
+    
+    for {
+        select {
+        case <-ctx.Done():
+            return
+        case <-ticker.C:
+            m.collectMetrics()
+        }
+    }
+}
+
+func (m *MCPResourceMonitor) collectMetrics() {
+    m.mu.Lock()
+    defer m.mu.Unlock()
+    
+    for serverName, process := range m.processes {
+        if process == nil {
+            continue
+        }
+        
+        // Collect resource metrics (implementation depends on your monitoring system)
+        metrics := m.getProcessMetrics(process)
+        m.metrics[serverName] = metrics
+        
+        // Log high resource usage
+        if metrics.CPU > 80.0 {
+            agentflow.Logger().Warn().
+                Str("server", serverName).
+                Float64("cpu_percent", metrics.CPU).
+                Msg("High CPU usage detected for MCP server")
+        }
+        
+        if metrics.Memory > 1024*1024*1024 { // 1GB
+            agentflow.Logger().Warn().
+                Str("server", serverName).
+                Uint64("memory_bytes", metrics.Memory).
+                Msg("High memory usage detected for MCP server")
+        }
+    }
+}
+```
+
+#### 3. Security and Access Control
+
+```go
+// Secure MCP server configuration
+type SecureMCPConfig struct {
+    // Network security
+    AllowedHosts []string `yaml:"allowed_hosts"`
+    UseTLS       bool     `yaml:"use_tls"`
+    TLSCertPath  string   `yaml:"tls_cert_path"`
+    TLSKeyPath   string   `yaml:"tls_key_path"`
+    
+    // Authentication
+    RequireAuth  bool   `yaml:"require_auth"`
+    AuthMethod   string `yaml:"auth_method"` // "token", "mutual-tls", "none"
+    AuthTokens   []string `yaml:"auth_tokens"`
+    
+    // Resource limits
+    MaxRequestSize    int64         `yaml:"max_request_size"`
+    RequestTimeout    time.Duration `yaml:"request_timeout"`
+    MaxConcurrentReqs int           `yaml:"max_concurrent_requests"`
+}
+
+// Apply security configuration
+func configureMCPSecurity(config SecureMCPConfig) agentflow.MCPConfig {
+    mcpConfig := agentflow.MCPConfig{
+        Enabled: true,
+        Security: agentflow.MCPSecurityConfig{
+            RequireAuth:       config.RequireAuth,
+            AuthMethod:        config.AuthMethod,
+            MaxRequestSize:    config.MaxRequestSize,
+            RequestTimeout:    config.RequestTimeout,
+            MaxConcurrentReqs: config.MaxConcurrentReqs,
+        },
+    }
+    
+    // Add TLS configuration if enabled
+    if config.UseTLS {
+        mcpConfig.Security.TLS = &agentflow.MCPTLSConfig{
+            CertPath: config.TLSCertPath,
+            KeyPath:  config.TLSKeyPath,
+        }
+    }
+    
+    return mcpConfig
+}
+```
+
+#### 4. High Availability and Load Balancing
+
+```go
+// Configure MCP with high availability
+type HAMCPConfig struct {
+    LoadBalancer LoadBalancerConfig   `yaml:"load_balancer"`
+    Servers      []MCPServerCluster   `yaml:"server_clusters"`
+}
+
+type LoadBalancerConfig struct {
+    Strategy     string `yaml:"strategy"`     // "round-robin", "least-connections", "health-based"
+    HealthChecks bool   `yaml:"health_checks"`
+    FailoverTime time.Duration `yaml:"failover_time"`
+}
+
+type MCPServerCluster struct {
+    Name      string          `yaml:"name"`
+    Primary   MCPServerSpec   `yaml:"primary"`
+    Replicas  []MCPServerSpec `yaml:"replicas"`
+    MinReplicas int           `yaml:"min_replicas"`
+}
+
+// Implementation with failover support
+type HAMCPManager struct {
+    clusters map[string]*MCPCluster
+    router   *MCPLoadBalancer
+}
+
+func (m *HAMCPManager) ExecuteTool(ctx context.Context, toolName string, params map[string]interface{}) (map[string]interface{}, error) {
+    // Route request to healthy server
+    server := m.router.SelectServer(toolName)
+    if server == nil {
+        return nil, fmt.Errorf("no healthy servers available for tool %s", toolName)
+    }
+    
+    result, err := server.ExecuteTool(ctx, toolName, params)
+    if err != nil {
+        // Try failover
+        if fallbackServer := m.router.GetFallbackServer(toolName, server); fallbackServer != nil {
+            agentflow.Logger().Warn().
+                Str("tool", toolName).
+                Str("failed_server", server.Name()).
+                Str("fallback_server", fallbackServer.Name()).
+                Msg("Using fallback MCP server")
+                
+            return fallbackServer.ExecuteTool(ctx, toolName, params)
+        }
+    }
     
     return result, err
+}
+```
+
+#### 5. Performance Optimization
+
+```go
+// Connection pooling and caching for MCP
+type OptimizedMCPClient struct {
+    connectionPool *MCPConnectionPool
+    resultCache    *MCPResultCache
+    config         MCPOptimizationConfig
+}
+
+type MCPOptimizationConfig struct {
+    // Connection pooling
+    MaxConnections     int           `yaml:"max_connections"`
+    ConnectionIdleTime time.Duration `yaml:"connection_idle_time"`
+    
+    // Result caching
+    EnableCaching      bool          `yaml:"enable_caching"`
+    CacheTTL          time.Duration `yaml:"cache_ttl"`
+    MaxCacheSize      int           `yaml:"max_cache_size"`
+    
+    // Request optimization
+    BatchRequests     bool          `yaml:"batch_requests"`
+    MaxBatchSize      int           `yaml:"max_batch_size"`
+    CompressionLevel  int           `yaml:"compression_level"`
+}
+
+func (c *OptimizedMCPClient) ExecuteTool(ctx context.Context, toolName string, params map[string]interface{}) (map[string]interface{}, error) {
+    // Check cache first for cacheable operations
+    if c.config.EnableCaching && c.isCacheable(toolName, params) {
+        if result := c.resultCache.Get(toolName, params); result != nil {
+            agentflow.Logger().Debug().
+                Str("tool", toolName).
+                Msg("Returning cached MCP result")
+            return result, nil
+        }
+    }
+    
+    // Get connection from pool
+    conn := c.connectionPool.GetConnection()
+    defer c.connectionPool.ReturnConnection(conn)
+    
+    // Execute with timeout
+    result, err := conn.ExecuteWithTimeout(ctx, toolName, params, c.config.RequestTimeout)
+    if err != nil {
+        return nil, err
+    }
+    
+    // Cache result if enabled
+    if c.config.EnableCaching && c.isCacheable(toolName, params) {
+        c.resultCache.Set(toolName, params, result, c.config.CacheTTL)
+    }
+    
+    return result, nil
+}
+```
+
+#### 6. Logging and Observability
+
+```go
+// Comprehensive MCP logging for production
+func configureMCPLogging() {
+    // Set up structured logging for MCP operations
+    agentflow.Logger().Info().Msg("Configuring MCP production logging")
+    
+    // Register MCP-specific log handlers
+    mcpLogger := agentflow.Logger().With().Str("component", "mcp").Logger()
+    
+    // Log all MCP tool invocations
+    agentflow.RegisterCallback(agentflow.HookBeforeMCPToolCall, "mcp-logger", func(ctx context.Context, data interface{}) error {
+        if toolData, ok := data.(agentflow.MCPToolCallData); ok {
+            mcpLogger.Info().
+                Str("tool", toolData.ToolName).
+                Str("server", toolData.ServerName).
+                Interface("params", toolData.Parameters).
+                Msg("MCP tool call initiated")
+        }
+        return nil
+    })
+    
+    // Log tool results and errors
+    agentflow.RegisterCallback(agentflow.HookAfterMCPToolCall, "mcp-result-logger", func(ctx context.Context, data interface{}) error {
+        if resultData, ok := data.(agentflow.MCPToolResultData); ok {
+            if resultData.Error != nil {
+                mcpLogger.Error().
+                    Err(resultData.Error).
+                    Str("tool", resultData.ToolName).
+                    Dur("duration", resultData.Duration).
+                    Msg("MCP tool call failed")
+            } else {
+                mcpLogger.Info().
+                    Str("tool", resultData.ToolName).
+                    Dur("duration", resultData.Duration).
+                    Msg("MCP tool call completed")
+            }
+        }
+        return nil
+    })
 }
 ```
 
