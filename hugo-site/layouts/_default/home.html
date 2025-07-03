@@ -1,0 +1,28 @@
+{{ define "main" }}
+<div class="hero-section">
+    <div class="container">
+        <div class="row">
+            <div class="col-lg-8 mx-auto text-center">
+                <h1 class="display-4 mb-4">{{ .Title }}</h1>
+                <p class="lead mb-4">{{ .Site.Params.description }}</p>
+                <div class="d-flex justify-content-center gap-3">
+                    <a href="/agentflow/docs/" class="btn btn-light btn-lg">
+                        <i class="fas fa-book me-2"></i>Get Started
+                    </a>
+                    <a href="{{ .Site.Params.github_repo }}" class="btn btn-outline-light btn-lg">
+                        <i class="fab fa-github me-2"></i>View Source
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="content-section">
+    <div class="container">
+        <div class="content">
+            {{ .Content }}
+        </div>
+    </div>
+</div>
+{{ end }}

@@ -1,0 +1,42 @@
+{{ define "main" }}
+<div class="content-section">
+    <div class="container">
+        <div class="row">
+            <div class="col-lg-3">
+                <div class="sidebar">
+                    <h5>{{ .Title }}</h5>
+                    {{ if .Sections }}
+                    <ul class="list-unstyled">
+                        {{ range .Sections }}
+                        <li class="mb-2">
+                            <a href="{{ .RelPermalink }}" class="text-decoration-none">
+                                <i class="fas fa-folder me-2"></i>{{ .Title }}
+                            </a>
+                        </li>
+                        {{ end }}
+                    </ul>
+                    {{ end }}
+                    
+                    {{ if .Pages }}
+                    <ul class="list-unstyled">
+                        {{ range .Pages }}
+                        <li class="mb-2">
+                            <a href="{{ .RelPermalink }}" class="text-decoration-none">
+                                <i class="fas fa-file-alt me-2"></i>{{ .Title }}
+                            </a>
+                        </li>
+                        {{ end }}
+                    </ul>
+                    {{ end }}
+                </div>
+            </div>
+            <div class="col-lg-9">
+                <div class="content-main">
+                    <h1>{{ .Title }}</h1>
+                    {{ .Content }}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{{ end }}

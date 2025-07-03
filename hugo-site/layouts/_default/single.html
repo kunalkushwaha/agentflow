@@ -1,0 +1,59 @@
+{{ define "main" }}
+<div class="content-section">
+    <div class="container">
+        <div class="row">
+            <div class="col-lg-3">
+                <div class="sidebar">
+                    {{ $section := .Section }}
+                    {{ with .Site.GetPage (printf "/%s" $section) }}
+                    <h5>{{ .Title }}</h5>
+                    <ul class="list-unstyled">
+                        {{ range .Pages }}
+                        <li class="mb-2 {{ if eq .RelPermalink $.RelPermalink }}fw-bold{{ end }}">
+                            <a href="{{ .RelPermalink }}" class="text-decoration-none">
+                                <i class="fas fa-file-alt me-2"></i>{{ .Title }}
+                            </a>
+                        </li>
+                        {{ end }}
+                    </ul>
+                    {{ end }}
+                </div>
+            </div>
+            <div class="col-lg-9">
+                <div class="content-main">
+                    <nav aria-label="breadcrumb">
+                        <ol class="breadcrumb">
+                            <li class="breadcrumb-item"><a href="/">Home</a></li>
+                            {{ if .Section }}
+                            <li class="breadcrumb-item">
+                                <a href="/{{ .Section }}/">{{ .Section | title }}</a>
+                            </li>
+                            {{ end }}
+                            <li class="breadcrumb-item active">{{ .Title }}</li>
+                        </ol>
+                    </nav>
+                    
+                    <h1>{{ .Title }}</h1>
+                    {{ if .Description }}
+                    <p class="lead">{{ .Description }}</p>
+                    {{ end }}
+                    
+                    <div class="content">
+                        {{ .Content }}
+                    </div>
+                    
+                    <hr class="my-4">
+                    <div class="d-flex justify-content-between">
+                        <small class="text-muted">
+                            Last updated: {{ .Lastmod.Format "January 2, 2006" }}
+                        </small>
+                        <a href="{{ .Site.Params.github_repo }}/edit/{{ .Site.Params.github_branch }}/hugo-site/content/{{ .File.Path }}" class="btn btn-sm btn-outline-secondary">
+                            <i class="fas fa-edit me-1"></i>Edit this page
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{{ end }}

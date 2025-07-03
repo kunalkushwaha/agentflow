@@ -1,0 +1,43 @@
+baseURL = "https://kunalkushwaha.github.io/agentflow/"
+languageCode = "en-us"
+title = "AgentFlow Documentation"
+
+# Language settings
+contentDir = "content"
+defaultContentLanguage = "en"
+
+enableRobotsTXT = true
+enableGitInfo = true
+
+# Markdown settings
+[markup]
+  [markup.goldmark]
+    [markup.goldmark.renderer]
+      unsafe = true
+  [markup.highlight]
+    style = "github"
+    lineNos = true
+
+# Menu configuration
+[menu]
+  [[menu.main]]
+    name = "Docs"
+    url = "/agentflow/docs/"
+    weight = 10
+  [[menu.main]]
+    name = "Examples"
+    url = "/agentflow/examples/"
+    weight = 20
+  [[menu.main]]
+    name = "Contributors"
+    url = "/agentflow/contributors/"
+    weight = 30
+  [[menu.main]]
+    name = "GitHub"
+    url = "https://github.com/kunalkushwaha/agentflow"
+    weight = 40
+
+[params]
+  github_repo = "https://github.com/kunalkushwaha/agentflow"
+  github_branch = "main"
+  description = "The Go SDK for building production-ready multi-agent AI systems"    

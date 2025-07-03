@@ -1,0 +1,12 @@
+# Hugo build outputs
+public/
+resources/
+.hugo_build.lock
+
+# Dependencies
+node_modules/
+themes/
+
+# OS
+.DS_Store
+Thumbs.db
