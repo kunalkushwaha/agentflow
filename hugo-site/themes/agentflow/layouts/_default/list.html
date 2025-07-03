@@ -1,0 +1,49 @@
+{{ define "main" }}
+<div class="container py-5">
+    <div class="row">
+        <div class="col-12">
+            <!-- Page Header -->
+            <div class="text-center mb-5">
+                <h1 class="display-5 fw-bold">{{ .Title }}</h1>
+                {{ if .Content }}
+                <div class="lead">
+                    {{ .Content }}
+                </div>
+                {{ end }}
+            </div>
+            
+            <!-- Pages List -->
+            {{ if .Pages }}
+            <div class="row g-4">
+                {{ range .Pages }}
+                <div class="col-lg-6">
+                    <div class="card h-100 shadow-sm">
+                        <div class="card-body">
+                            <h5 class="card-title">
+                                <a href="{{ .RelPermalink }}" class="text-decoration-none">{{ .Title }}</a>
+                            </h5>
+                            {{ if .Description }}
+                            <p class="card-text text-muted">{{ .Description }}</p>
+                            {{ else if .Summary }}
+                            <p class="card-text text-muted">{{ .Summary | truncate 150 }}</p>
+                            {{ end }}
+                            <div class="d-flex justify-content-between align-items-center">
+                                <a href="{{ .RelPermalink }}" class="btn btn-primary btn-sm">Read More</a>
+                                {{ if .Date }}
+                                <small class="text-muted">{{ .Date.Format "Jan 2, 2006" }}</small>
+                                {{ end }}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                {{ end }}
+            </div>
+            {{ else }}
+            <div class="text-center py-5">
+                <p class="text-muted">No content available in this section yet.</p>
+            </div>
+            {{ end }}
+        </div>
+    </div>
+</div>
+{{ end }}

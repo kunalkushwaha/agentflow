@@ -1,0 +1,92 @@
+{{ define "main" }}
+<!-- Hero Section -->
+<section class="hero-section bg-gradient-primary text-white py-5">
+    <div class="container py-5">
+        <div class="row align-items-center">
+            <div class="col-lg-8">
+                <h1 class="display-4 fw-bold mb-4">{{ site.Params.hero.title }}</h1>
+                <p class="lead mb-4">{{ site.Params.hero.description }}</p>
+                <div class="d-flex gap-3">
+                    <a href="{{ site.Params.hero.primary_button_url | relURL }}" class="btn btn-light btn-lg">
+                        {{ site.Params.hero.primary_button }}
+                    </a>
+                    <a href="{{ site.Params.hero.secondary_button_url }}" class="btn btn-outline-light btn-lg" target="_blank">
+                        {{ site.Params.hero.secondary_button }}
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- Content Sections -->
+<section class="py-5">
+    <div class="container">
+        <div class="row">
+            <div class="col-12">
+                <h2 class="text-center mb-5">AgentFlow Documentation</h2>
+                <p class="text-center text-muted mb-5">{{ site.Params.description }}</p>
+            </div>
+        </div>
+        
+        <div class="row g-4">
+            <!-- Documentation Card -->
+            <div class="col-lg-4">
+                <div class="card h-100 shadow-sm">
+                    <div class="card-body">
+                        <div class="d-flex align-items-center mb-3">
+                            <i class="fas fa-book text-primary fs-2 me-3"></i>
+                            <h4 class="card-title mb-0">{{ site.Params.sections.docs.title }}</h4>
+                        </div>
+                        <p class="card-text">{{ site.Params.sections.docs.description }}</p>
+                        <a href="/docs/" class="btn btn-primary">Browse Documentation</a>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Examples Card -->
+            <div class="col-lg-4">
+                <div class="card h-100 shadow-sm">
+                    <div class="card-body">
+                        <div class="d-flex align-items-center mb-3">
+                            <i class="fas fa-code text-success fs-2 me-3"></i>
+                            <h4 class="card-title mb-0">{{ site.Params.sections.examples.title }}</h4>
+                        </div>
+                        <p class="card-text">{{ site.Params.sections.examples.description }}</p>
+                        <a href="/examples/" class="btn btn-success">View Examples</a>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Contributors Card -->
+            <div class="col-lg-4">
+                <div class="card h-100 shadow-sm">
+                    <div class="card-body">
+                        <div class="d-flex align-items-center mb-3">
+                            <i class="fas fa-users text-info fs-2 me-3"></i>
+                            <h4 class="card-title mb-0">{{ site.Params.sections.contributors.title }}</h4>
+                        </div>
+                        <p class="card-text">{{ site.Params.sections.contributors.description }}</p>
+                        <a href="/contributors/" class="btn btn-info">Contributor Guide</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- Main Content -->
+{{ if .Content }}
+<section class="py-5">
+    <div class="container">
+        <div class="row">
+            <div class="col-12">
+                <div class="content">
+                    {{ .Content }}
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+{{ end }}
+{{ end }}

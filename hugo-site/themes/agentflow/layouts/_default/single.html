@@ -1,0 +1,78 @@
+{{ define "main" }}
+<div class="container-fluid px-0">
+    <div class="row g-0">
+        <!-- Sidebar -->
+        <div class="col-lg-3 col-xl-2 bg-light sidebar">
+            <div class="sticky-top" style="top: 76px;">
+                <div class="p-3">
+                    <h6 class="text-muted text-uppercase fw-bold mb-3">{{ .Section | title }}</h6>
+                    
+                    <!-- Navigation based on section -->
+                    {{ if eq .Section "docs" }}
+                        {{ partial "nav-docs.html" . }}
+                    {{ else if eq .Section "examples" }}
+                        {{ partial "nav-examples.html" . }}
+                    {{ else if eq .Section "contributors" }}
+                        {{ partial "nav-contributors.html" . }}
+                    {{ end }}
+                </div>
+            </div>
+        </div>
+        
+        <!-- Main Content -->
+        <div class="col-lg-9 col-xl-10">
+            <div class="content-area p-4">
+                <!-- Breadcrumb -->
+                <nav aria-label="breadcrumb" class="mb-4">
+                    <ol class="breadcrumb">
+                        <li class="breadcrumb-item"><a href="/">Home</a></li>
+                        <li class="breadcrumb-item"><a href="/{{ .Section }}/">{{ .Section | title }}</a></li>
+                        <li class="breadcrumb-item active" aria-current="page">{{ .Title }}</li>
+                    </ol>
+                </nav>
+                
+                <!-- Page Header -->
+                <div class="d-flex justify-content-between align-items-start mb-4">
+                    <div>
+                        <h1 class="mb-2">{{ .Title }}</h1>
+                        {{ if .Description }}
+                        <p class="text-muted">{{ .Description }}</p>
+                        {{ end }}
+                    </div>
+                    
+                    <!-- Edit this page link -->
+                    {{ if site.Params.edit_page }}
+                    <a href="{{ site.Params.github_repo }}/edit/main/hugo-site/content/{{ .File.Path }}" 
+                       class="btn btn-outline-secondary btn-sm" target="_blank">
+                        <i class="fas fa-edit me-2"></i>Edit this page
+                    </a>
+                    {{ end }}
+                </div>
+                
+                <!-- Content -->
+                <div class="content">
+                    {{ .Content }}
+                </div>
+                
+                <!-- Page Navigation -->
+                <div class="row mt-5 pt-4 border-top">
+                    <div class="col-md-6">
+                        {{ with .PrevInSection }}
+                        <a href="{{ .RelPermalink }}" class="btn btn-outline-primary">
+                            <i class="fas fa-arrow-left me-2"></i>{{ .Title }}
+                        </a>
+                        {{ end }}
+                    </div>
+                    <div class="col-md-6 text-md-end">
+                        {{ with .NextInSection }}
+                        <a href="{{ .RelPermalink }}" class="btn btn-outline-primary">
+                            {{ .Title }}<i class="fas fa-arrow-right ms-2"></i>
+                        </a>
+                        {{ end }}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{{ end }}

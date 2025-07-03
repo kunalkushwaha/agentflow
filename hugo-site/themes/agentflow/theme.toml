@@ -1,0 +1,11 @@
+name = "agentflow"
+license = "MIT"
+description = "Custom responsive theme for AgentFlow documentation"
+homepage = "https://github.com/kunalkushwaha/agentflow"
+tags = ["documentation", "bootstrap", "responsive"]
+features = ["responsive", "syntax-highlighting", "navigation"]
+min_version = "0.119.0"
+
+[author]
+  name = "AgentFlow Contributors"
+  homepage = "https://github.com/kunalkushwaha/agentflow"
