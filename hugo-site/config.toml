@@ -1,0 +1,63 @@
+baseURL = "https://kunalkushwaha.github.io/agentflow/"
+languageCode = "en-us"
+title = "AgentFlow Documentation"
+theme = "agentflow"
+
+# Hugo configuration
+enableGitInfo = true
+enableRobotsTXT = true
+enableEmoji = true
+
+# Markdown configuration
+[markup]
+  [markup.goldmark]
+    [markup.goldmark.renderer]
+      unsafe = true
+  [markup.highlight]
+    style = "github"
+    lineNos = true
+    lineNumbersInTable = false
+    tabWidth = 4
+
+# Menu configuration
+[menu]
+  [[menu.main]]
+    name = "Docs"
+    url = "/docs/"
+    weight = 10
+  [[menu.main]]
+    name = "Examples"
+    url = "/examples/"
+    weight = 20
+  [[menu.main]]
+    name = "Contributors"
+    url = "/contributors/"
+    weight = 30
+
+# Params for theme
+[params]
+  version = "v0.1.0"
+  description = "The Go SDK for building production-ready multi-agent AI systems"
+  github_repo = "https://github.com/kunalkushwaha/agentflow"
+  edit_page = true
+  
+  # Hero section
+  [params.hero]
+    title = "AgentFlow Documentation"
+    description = "The Go SDK for building production-ready multi-agent AI systems"
+    primary_button = "Get Started"
+    primary_button_url = "/docs/"
+    secondary_button = "View Source"
+    secondary_button_url = "https://github.com/kunalkushwaha/agentflow"
+
+# Content sections
+[params.sections]
+  [params.sections.docs]
+    title = "Documentation"
+    description = "Core documentation, architecture, and API references"
+  [params.sections.examples]
+    title = "Examples"
+    description = "Example workflows and code snippets"
+  [params.sections.contributors]
+    title = "Contributors"
+    description = "Contributor guides and development documentation"
