@@ -27,10 +27,11 @@ AgentFlow makes it incredibly simple to build and prototype AI agent workflows i
 
 - **30-Second Setup**: Generate working multi-agent systems with a single CLI command
 - **Multi-Agent Orchestration**: Build collaborative, sequential, loop, and mixed workflows with automatic visual diagrams
+- **Memory & RAG**: Persistent memory with vector search and Retrieval-Augmented Generation
 - **Workflow Visualization**: Automatic Mermaid diagram generation for all orchestration patterns
 - **LLM-Driven Tool Discovery**: Agents automatically find and use the right tools via MCP protocol  
 - **Production-First**: Built-in error handling, fault tolerance, and enterprise patterns
-- **Unified API**: One clean interface for all LLM providers and tool integrations
+- **Unified API**: One clean interface for all LLM providers, memory systems, and tool integrations
 - **Zero Dependencies**: Pure Go with minimal external requirements
 - **Developer Experience**: From prototype to production without rewriting code
 
@@ -39,6 +40,7 @@ AgentFlow makes it incredibly simple to build and prototype AI agent workflows i
 AgentFlow is designed for developers who want to:
 
 - **Build intelligent, event-driven workflows** with configurable orchestration patterns (collaborative, sequential, loop, mixed)
+- **Create agents with memory and knowledge** using vector search, RAG, and persistent storage
 - **Visualize complex multi-agent systems** with automatic Mermaid diagram generation
 - **Integrate multiple agents and tools** into cohesive, observable systems with built-in fault tolerance
 - **Leverage any LLM provider** (OpenAI, Azure OpenAI, Ollama) through unified interfaces
@@ -51,10 +53,12 @@ Whether you're prototyping a single-agent application or orchestrating complex m
 
 > **⚠️ Alpha Stage**: AgentFlow has production-grade features but APIs are rapidly evolving. Use for prototyping and research while we stabilize for production.
 
-**Researchers**: Prototype multi-agent systems with enterprise-grade patterns  
-**Developers**: Learn production-ready agent architectures and build proof-of-concepts  
-**Experimenters**: Test multi-agent workflows with built-in observability and error handling  
-**Early Adopters**: Explore cutting-edge agent frameworks with production features  
+- **Intelligent Assistants**: Build research assistants, coding helpers, and customer support agents
+- **Knowledge-Based Systems**: Create RAG-powered agents with document understanding and persistent memory
+- **Multi-Agent Workflows**: Create collaborative agent systems that work together on complex tasks
+- **Tool-Using Agents**: Develop agents that can use external tools and APIs to accomplish tasks
+- **Enterprise AI Systems**: Build production-ready AI systems with monitoring, metrics, and fault tolerance
+- **Prototype to Production**: Start simple and scale to complex multi-agent systems without rewriting code  
 
 ## Quick Start (30 seconds)
 
@@ -76,6 +80,27 @@ cd research-system
 
 # Run with any message - agents work together intelligently
 go run . -m "research AI trends and provide comprehensive analysis"
+```
+
+### 3. Add Memory & RAG Capabilities
+```bash
+# Create agents with persistent memory and knowledge base
+agentcli create knowledge-assistant \
+  --memory-enabled \
+  --memory-provider pgvector \
+  --rag-enabled \
+  --embedding-provider openai \
+  --hybrid-search
+
+cd knowledge-assistant
+
+# Start database (auto-generated Docker setup)
+docker compose up -d
+./setup.sh
+
+# Agents now remember conversations and can search knowledge
+go run . -m "Remember that I prefer morning meetings"
+go run . -m "What do you know about my meeting preferences?"
 ```
 
 ### 3. Try Different Orchestration Patterns

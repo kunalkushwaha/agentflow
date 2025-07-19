@@ -15,6 +15,7 @@ AgentFlow is a production-ready Go framework for building intelligent agent work
 
 ### **Core Concepts**  
 - **[Agent Fundamentals](guides/AgentBasics.md)** - Understanding AgentHandler interface and patterns
+- **[Memory & RAG](guides/Memory.md)** - Persistent memory, vector search, and knowledge bases
 - **[Multi-Agent Orchestration](multi_agent_orchestration.md)** - Orchestration patterns and API reference
 - **[Examples & Tutorials](guides/Examples.md)** - Practical examples and code samples
 - **[Tool Integration](guides/ToolIntegration.md)** - MCP protocol and dynamic tool discovery
@@ -23,6 +24,8 @@ AgentFlow is a production-ready Go framework for building intelligent agent work
 
 ### **Advanced Usage**
 - **[Multi-Agent Orchestration](multi_agent_orchestration.md)** - Advanced orchestration patterns and configuration
+- **[RAG Configuration](guides/RAGConfiguration.md)** - Retrieval-Augmented Generation setup and tuning
+- **[Memory Provider Setup](guides/MemoryProviderSetup.md)** - PostgreSQL, Weaviate, and in-memory setup guides
 - **[Workflow Visualization](visualization_guide.md)** - Generate and customize Mermaid diagrams
 - **[Production Deployment](guides/Production.md)** - Scaling, monitoring, and best practices  
 - **[Error Handling](guides/ErrorHandling.md)** - Resilient agent workflows
@@ -32,6 +35,7 @@ AgentFlow is a production-ready Go framework for building intelligent agent work
 ### **API Reference**
 - **[Core Package API](api/core.md)** - Complete public API reference
 - **[Agent Interface](api/agents.md)** - AgentHandler and related types
+- **[Memory API](api/memory.md)** - Memory system and RAG APIs
 - **[MCP Integration](api/mcp.md)** - Tool discovery and execution APIs
 - **[CLI Commands](api/cli.md)** - agentcli reference
 

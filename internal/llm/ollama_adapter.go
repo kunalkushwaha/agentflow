@@ -13,17 +13,17 @@ import (
 
 // OllamaAdapter implements the LLMAdapter interface for Ollama's API.
 type OllamaAdapter struct {
-	apiKey      string
+	baseURL     string
 	model       string
 	maxTokens   int
 	temperature float32
 }
 
 // NewOllamaAdapter creates a new OllamaAdapter instance.
-func NewOllamaAdapter(apiKey, model string, maxTokens int, temperature float32) (*OllamaAdapter, error) {
-	// API key is optional for local Ollama instances
-	if apiKey == "" {
-		apiKey = "local" // Set a default value for local usage
+// baseURL should include scheme and host, e.g. http://localhost:11434
+func NewOllamaAdapter(baseURL, model string, maxTokens int, temperature float32) (*OllamaAdapter, error) {
+	if baseURL == "" {
+		baseURL = "http://localhost:11434"
 	}
 	if model == "" {
 		model = "gemma3:latest" // Replace with Ollama's default model
@@ -36,7 +36,7 @@ func NewOllamaAdapter(apiKey, model string, maxTokens int, temperature float32) 
 	}
 
 	return &OllamaAdapter{
-		apiKey:      apiKey,
+		baseURL:     baseURL,
 		model:       model,
 		maxTokens:   maxTokens,
 		temperature: temperature,
@@ -49,12 +49,27 @@ func (o *OllamaAdapter) Call(ctx context.Context, prompt Prompt) (Response, erro
 		return Response{}, errors.New("both system and user prompts cannot be empty")
 	}
 
+	// Determine final parameters, preferring explicit prompt settings
+	var finalMaxTokens int
+if prompt.Parameters.MaxTokens != nil && *prompt.Parameters.MaxTokens > 0 {
+	finalMaxTokens = int(*prompt.Parameters.MaxTokens)
+} else {
+	finalMaxTokens = o.maxTokens
+}
+
+var finalTemperature float32
+if prompt.Parameters.Temperature != nil && *prompt.Parameters.Temperature > 0 {
+	finalTemperature = *prompt.Parameters.Temperature
+} else {
+	finalTemperature = o.temperature
+}
+
 	// Prepare the request payload
 	requestBody := map[string]interface{}{
 		"model":       o.model,
 		"messages":    []map[string]string{{"role": "system", "content": prompt.System}, {"role": "user", "content": prompt.User}},
-		"max_tokens":  prompt.Parameters.MaxTokens,
-		"temperature": prompt.Parameters.Temperature,
+		"max_tokens":  finalMaxTokens,
+		"temperature": finalTemperature,
 		"stream":      false,
 	}
 
@@ -66,7 +81,7 @@ func (o *OllamaAdapter) Call(ctx context.Context, prompt Prompt) (Response, erro
 	client := &http.Client{
 		Timeout: 30 * time.Second, // Add 30 second timeout
 	}
-	req, err := http.NewRequestWithContext(ctx, "POST", "http://localhost:11434/api/chat", bytes.NewBuffer(payload))
+	req, err := http.NewRequestWithContext(ctx, "POST", fmt.Sprintf("%s/api/chat", o.baseURL), bytes.NewBuffer(payload))
 	if err != nil {
 		return Response{}, fmt.Errorf("failed to create HTTP request: %w", err)
 	}

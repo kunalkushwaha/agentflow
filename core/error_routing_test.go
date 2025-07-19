@@ -150,7 +150,7 @@ func TestErrorCategorization(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := fmt.Errorf(tt.errorMsg)
+			err := fmt.Errorf("%s", tt.errorMsg)
 			code, severity, category := categorizeError(err)
 
 			assert.Equal(t, tt.expectedCode, code, "Error code mismatch")

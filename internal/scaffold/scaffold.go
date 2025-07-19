@@ -53,6 +53,17 @@ func CreateAgentProjectModular(config ProjectConfig) error {
 		return err
 	}
 
+	// Generate Docker Compose files for database providers
+	if config.MemoryEnabled && (config.MemoryProvider == "pgvector" || config.MemoryProvider == "weaviate") {
+		dockerGenerator := NewDockerComposeGenerator(config)
+		if err := dockerGenerator.GenerateDockerCompose(); err != nil {
+			return fmt.Errorf("failed to generate Docker Compose files: %w", err)
+		}
+		if err := dockerGenerator.GenerateSetupScript(); err != nil {
+			return fmt.Errorf("failed to generate setup scripts: %w", err)
+		}
+	}
+
 	// Generate workflow diagrams if requested
 	if config.Visualize {
 		if err := generateWorkflowDiagrams(config); err != nil {
@@ -81,32 +92,274 @@ func createGoMod(config ProjectConfig) error {
 // createReadme creates the README.md file
 func createReadme(config ProjectConfig) error {
 	content := fmt.Sprintf("# %s\n\n", config.Name)
-	content += "This AgentFlow project was generated using the AgentFlow CLI with modular templates.\n\n"
+	content += "**An AgentFlow project with intelligent multi-agent workflows**\n\n"
+	content += "This project was generated using the AgentFlow CLI and includes production-ready features for building AI agent systems.\n\n"
 
-	content += "## Project Configuration\n\n"
-	content += fmt.Sprintf("- **Orchestration Mode**: %s\n", config.OrchestrationMode)
-	content += fmt.Sprintf("- **LLM Provider**: %s\n", config.Provider)
+	// Quick Start section
+	content += "## 🚀 Quick Start\n\n"
+	content += "```bash\n"
+	content += "# Install dependencies\n"
+	content += "go mod tidy\n\n"
+	content += "# Run your agents with a message\n"
+	content += "go run . -m \"Your message here\"\n\n"
+	if config.MemoryEnabled && (config.MemoryProvider == "pgvector" || config.MemoryProvider == "weaviate") {
+		content += "# Start the database (if using external memory provider)\n"
+		if config.MemoryProvider == "pgvector" || config.MemoryProvider == "weaviate" {
+			content += "docker compose up -d\n"
+			content += "./setup.sh  # or setup.bat on Windows\n\n"
+		}
+	}
+	content += "```\n\n"
+
+	// Project Configuration section
+	content += "## ⚙️ Project Configuration\n\n"
+	content += "| Feature | Configuration |\n"
+	content += "|---------|---------------|\n"
+	content += fmt.Sprintf("| **Orchestration Mode** | %s |\n", config.OrchestrationMode)
+	content += fmt.Sprintf("| **LLM Provider** | %s |\n", config.Provider)
+	content += fmt.Sprintf("| **Number of Agents** | %d |\n", config.NumAgents)
 
 	if config.MCPEnabled {
-		content += "- **MCP Integration**: Enabled\n"
+		content += "| **MCP Integration** | ✅ Enabled |\n"
+		if config.MCPProduction {
+			content += "| **MCP Features** | Production (caching, metrics, load balancing) |\n"
+		}
 	}
 
-	content += "\n## Agents\n\n"
-	agents := utils.ResolveAgentNames(convertToUtilsConfig(config))
-	for _, agent := range agents {
-		content += fmt.Sprintf("- **%s** (%s): %s\n", agent.DisplayName, agent.Name, agent.Purpose)
+	if config.MemoryEnabled {
+		content += "| **Memory System** | ✅ Enabled |\n"
+		content += fmt.Sprintf("| **Memory Provider** | %s |\n", config.MemoryProvider)
+		content += fmt.Sprintf("| **Embedding Provider** | %s |\n", config.EmbeddingProvider)
+		if config.RAGEnabled {
+			content += "| **RAG (Retrieval-Augmented Generation)** | ✅ Enabled |\n"
+			content += fmt.Sprintf("| **RAG Configuration** | Chunk: %d tokens, Overlap: %d, Top-K: %d |\n", config.RAGChunkSize, config.RAGOverlap, config.RAGTopK)
+		}
+		if config.HybridSearch {
+			content += "| **Hybrid Search** | ✅ Enabled (semantic + keyword) |\n"
+		}
+		if config.SessionMemory {
+			content += "| **Session Memory** | ✅ Enabled |\n"
+		}
 	}
-
-	content += "\n## Usage\n\n"
-	content += "```bash\n"
-	content += "go mod tidy\n"
-	content += "go run . -m \"Your message here\"\n"
-	content += "```\n"
 
 	if config.Visualize {
-		content += "\n## Workflow Diagrams\n\n"
-		content += fmt.Sprintf("Visual workflow diagrams have been generated in the `%s` directory. These diagrams show the orchestration pattern and agent interactions for this project.\n", config.VisualizeOutputDir)
+		content += "| **Workflow Visualization** | ✅ Enabled |\n"
 	}
+
+	content += "\n"
+
+	// Agents section
+	content += "## 🤖 Agents\n\n"
+	agents := utils.ResolveAgentNames(convertToUtilsConfig(config))
+	for i, agent := range agents {
+		content += fmt.Sprintf("%d. **%s** (`%s`)\n", i+1, agent.DisplayName, agent.Name)
+		content += fmt.Sprintf("   - **Purpose**: %s\n", agent.Purpose)
+		content += fmt.Sprintf("   - **Role**: %s orchestration\n", config.OrchestrationMode)
+		content += "\n"
+	}
+
+	// Usage Examples section
+	content += "## 💡 Usage Examples\n\n"
+	content += "### Basic Usage\n"
+	content += "```bash\n"
+	content += "# Ask a simple question\n"
+	content += "go run . -m \"What is artificial intelligence?\"\n\n"
+	content += "# Complex analysis request\n"
+	content += "go run . -m \"Analyze the current trends in machine learning and provide recommendations\"\n"
+	content += "```\n\n"
+
+	if config.MemoryEnabled {
+		content += "### Memory & RAG Usage\n"
+		content += "```bash\n"
+		content += "# The agents will automatically:\n"
+		content += "# - Store conversation history\n"
+		content += "# - Query relevant memories\n"
+		if config.RAGEnabled {
+			content += "# - Use RAG to enhance responses with knowledge base\n"
+		}
+		content += "# - Build context from previous interactions\n"
+		content += "```\n\n"
+	}
+
+	if config.MemoryEnabled {
+		content += "\n## Memory System\n\n"
+		content += fmt.Sprintf("This project uses **%s** as the memory provider", config.MemoryProvider)
+		if config.EmbeddingProvider == "openai" {
+			content += " with **OpenAI embeddings**"
+		}
+		content += ".\n\n"
+
+		if config.MemoryProvider == "pgvector" {
+			content += "### PostgreSQL with pgvector Setup\n\n"
+			content += "To use the pgvector memory provider, you need PostgreSQL with the pgvector extension:\n\n"
+			content += "```bash\n"
+			content += "# Using Docker\n"
+			content += "docker run --name pgvector-db -e POSTGRES_PASSWORD=password -e POSTGRES_DB=agentflow -p 5432:5432 -d pgvector/pgvector:pg16\n"
+			content += "\n"
+			content += "# Update connection string in agentflow.toml:\n"
+			content += "# Connection: \"postgres://user:password@localhost:15432/agentflow?sslmode=disable\"\n"
+			content += "```\n\n"
+		} else if config.MemoryProvider == "weaviate" {
+			content += "### Weaviate Setup\n\n"
+			content += "To use the Weaviate memory provider, you need Weaviate running:\n\n"
+			content += "```bash\n"
+			content += "# Using Docker\n"
+			content += "docker run -d --name weaviate -p 8080:8080 -e QUERY_DEFAULTS_LIMIT=25 -e AUTHENTICATION_ANONYMOUS_ACCESS_ENABLED=true -e PERSISTENCE_DATA_PATH=/var/lib/weaviate -e DEFAULT_VECTORIZER_MODULE=none -e ENABLE_MODULES=text2vec-openai,text2vec-cohere,text2vec-huggingface,ref2vec-centroid,generative-openai,qna-openai semitechnologies/weaviate:latest\n"
+			content += "```\n\n"
+		}
+
+		if config.EmbeddingProvider == "openai" {
+			content += "### OpenAI API Key\n\n"
+			content += "Set your OpenAI API key as an environment variable:\n\n"
+			content += "```bash\n"
+			content += "export OPENAI_API_KEY=\"your-api-key-here\"\n"
+			content += "```\n\n"
+		} else if config.EmbeddingProvider == "ollama" {
+			content += "### Ollama Setup\n\n"
+			content += "Make sure Ollama is running and the embedding model is installed:\n\n"
+			content += "```bash\n"
+			content += "# Start Ollama (if not already running)\n"
+			content += "ollama serve\n"
+			content += "\n"
+			content += "# Install the embedding model\n"
+			content += fmt.Sprintf("ollama pull %s\n", config.EmbeddingModel)
+			content += "```\n\n"
+		}
+
+		if config.RAGEnabled {
+			content += "### RAG Features\n\n"
+			content += "This project includes RAG (Retrieval-Augmented Generation) capabilities:\n\n"
+			content += fmt.Sprintf("- **Chunk Size**: %d tokens\n", config.RAGChunkSize)
+			content += fmt.Sprintf("- **Overlap**: %d tokens\n", config.RAGOverlap)
+			content += fmt.Sprintf("- **Top-K Results**: %d\n", config.RAGTopK)
+			content += fmt.Sprintf("- **Score Threshold**: %.1f\n", config.RAGScoreThreshold)
+			if config.HybridSearch {
+				content += "- **Hybrid Search**: Enabled (semantic + keyword)\n"
+			}
+			if config.SessionMemory {
+				content += "- **Session Memory**: Enabled\n"
+			}
+			content += "\n"
+		}
+	}
+
+	if config.Visualize {
+		content += "\n## 📊 Workflow Diagrams\n\n"
+		content += fmt.Sprintf("Visual workflow diagrams have been generated in the `%s` directory. These diagrams show the orchestration pattern and agent interactions for this project.\n\n", config.VisualizeOutputDir)
+		content += "The diagrams include:\n"
+		content += "- **Workflow Overview**: High-level agent interaction patterns\n"
+		content += "- **Agent Details**: Individual agent roles and responsibilities\n"
+		content += "- **Configuration Summary**: Key settings and parameters\n\n"
+	}
+
+	// Documentation and Resources section
+	content += "## 📚 Documentation & Resources\n\n"
+	content += "### AgentFlow Documentation\n"
+	content += "- **[AgentFlow Documentation](https://github.com/kunalkushwaha/agentflow/tree/main/docs)** - Complete framework documentation\n"
+	content += "- **[Agent Basics Guide](https://github.com/kunalkushwaha/agentflow/blob/main/docs/guides/AgentBasics.md)** - Understanding AgentHandler interface and patterns\n"
+	content += "- **[Configuration Guide](https://github.com/kunalkushwaha/agentflow/blob/main/docs/guides/Configuration.md)** - Managing agentflow.toml and environment setup\n"
+	content += "- **[Examples & Tutorials](https://github.com/kunalkushwaha/agentflow/blob/main/docs/guides/Examples.md)** - Practical examples and code samples\n\n"
+
+	if config.MemoryEnabled {
+		content += "### Memory & RAG Documentation\n"
+		content += "- **[Memory System Guide](https://github.com/kunalkushwaha/agentflow/blob/main/docs/guides/Memory.md)** - Complete memory implementation guide\n"
+		content += "- **[RAG Configuration Guide](https://github.com/kunalkushwaha/agentflow/blob/main/docs/guides/RAGConfiguration.md)** - RAG configuration and best practices\n"
+		content += "- **[Memory Quick Reference](https://github.com/kunalkushwaha/agentflow/blob/main/docs/memory_quick_reference.md)** - Essential memory API reference\n\n"
+	}
+
+	if config.MCPEnabled {
+		content += "### MCP Integration Documentation\n"
+		content += "- **[Tool Integration Guide](https://github.com/kunalkushwaha/agentflow/blob/main/docs/guides/ToolIntegration.md)** - MCP protocol and dynamic tool discovery\n"
+		content += "- **[Custom Tools Guide](https://github.com/kunalkushwaha/agentflow/blob/main/docs/guides/CustomTools.md)** - Building your own MCP servers\n\n"
+	}
+
+	content += "### Advanced Topics\n"
+	content += "- **[Multi-Agent Orchestration](https://github.com/kunalkushwaha/agentflow/blob/main/docs/multi_agent_orchestration.md)** - Advanced orchestration patterns and configuration\n"
+	content += "- **[Production Deployment](https://github.com/kunalkushwaha/agentflow/blob/main/docs/guides/Production.md)** - Scaling, monitoring, and best practices\n"
+	content += "- **[Performance Tuning](https://github.com/kunalkushwaha/agentflow/blob/main/docs/guides/Performance.md)** - Optimization and benchmarking\n"
+	content += "- **[Error Handling](https://github.com/kunalkushwaha/agentflow/blob/main/docs/guides/ErrorHandling.md)** - Resilient agent workflows\n\n"
+
+	// Troubleshooting section
+	content += "## 🔧 Troubleshooting\n\n"
+	content += "### Common Issues\n\n"
+	
+	if config.MemoryEnabled {
+		content += "**Memory System Issues:**\n"
+		if config.MemoryProvider == "pgvector" {
+			content += "- **Database Connection Failed**: Ensure PostgreSQL with pgvector is running (`docker compose up -d`)\n"
+			content += "- **Permission Denied**: Check database user permissions and connection string\n"
+			content += "- **Vector Extension Missing**: Verify pgvector extension is installed in the database\n\n"
+		} else if config.MemoryProvider == "weaviate" {
+			content += "- **Weaviate Connection Failed**: Ensure Weaviate is running (`docker compose up -d`)\n"
+			content += "- **Schema Issues**: Check Weaviate class configuration and vector dimensions\n\n"
+		}
+		
+		if config.EmbeddingProvider == "openai" {
+			content += "- **OpenAI API Errors**: Verify `OPENAI_API_KEY` environment variable is set\n"
+			content += "- **Rate Limiting**: Implement retry logic or upgrade your OpenAI plan\n\n"
+		} else if config.EmbeddingProvider == "ollama" {
+			content += "- **Ollama Connection Failed**: Ensure Ollama is running (`ollama serve`)\n"
+			content += fmt.Sprintf("- **Model Not Found**: Install the embedding model (`ollama pull %s`)\n\n", config.EmbeddingModel)
+		}
+	}
+
+	content += "**General Issues:**\n"
+	content += "- **LLM Provider Errors**: Check API keys and endpoint configurations in `agentflow.toml`\n"
+	content += "- **Agent Not Responding**: Verify LLM provider credentials and network connectivity\n"
+	content += "- **Build Errors**: Run `go mod tidy` to ensure all dependencies are installed\n\n"
+
+	if config.MCPEnabled {
+		content += "**MCP Integration Issues:**\n"
+		content += "- **Tools Not Available**: Check MCP server configuration and connectivity\n"
+		content += "- **Tool Execution Failed**: Verify tool permissions and required dependencies\n\n"
+	}
+
+	content += "### Getting Help\n\n"
+	content += "- **[GitHub Issues](https://github.com/kunalkushwaha/agentflow/issues)** - Report bugs and request features\n"
+	content += "- **[Discussions](https://github.com/kunalkushwaha/agentflow/discussions)** - Community support and questions\n"
+	content += "- **[Documentation](https://github.com/kunalkushwaha/agentflow/tree/main/docs)** - Comprehensive guides and API reference\n\n"
+
+	// Project Structure section
+	content += "## 📁 Project Structure\n\n"
+	content += "```\n"
+	content += fmt.Sprintf("%s/\n", config.Name)
+	content += "├── main.go                 # Application entry point\n"
+	content += "├── agentflow.toml         # Configuration file\n"
+	agents = utils.ResolveAgentNames(convertToUtilsConfig(config))
+	for _, agent := range agents {
+		content += fmt.Sprintf("├── %s              # %s agent implementation\n", agent.FileName, agent.DisplayName)
+	}
+	if config.MemoryEnabled && (config.MemoryProvider == "pgvector" || config.MemoryProvider == "weaviate") {
+		content += "├── docker-compose.yml     # Database services\n"
+		content += "├── init-db.sql           # Database initialization\n"
+		content += "├── setup.sh/.bat         # Setup scripts\n"
+		content += "├── .env.example          # Environment template\n"
+	}
+	if config.Visualize {
+		content += fmt.Sprintf("├── %s/           # Workflow diagrams\n", config.VisualizeOutputDir)
+	}
+	content += "├── go.mod                 # Go module definition\n"
+	content += "└── README.md              # This file\n"
+	content += "```\n\n"
+
+	// Next Steps section
+	content += "## 🚀 Next Steps\n\n"
+	content += "1. **Customize Agents**: Modify agent logic in the generated `.go` files\n"
+	content += "2. **Configure Providers**: Update `agentflow.toml` with your API keys and settings\n"
+	if config.MemoryEnabled {
+		content += "3. **Add Knowledge**: Use the memory system to store and retrieve information\n"
+		if config.RAGEnabled {
+			content += "4. **Ingest Documents**: Add documents to your knowledge base for RAG\n"
+		}
+	}
+	if config.MCPEnabled {
+		content += "3. **Add Tools**: Configure additional MCP tools for enhanced capabilities\n"
+	}
+	content += fmt.Sprintf("%d. **Scale Up**: Add more agents or modify orchestration patterns as needed\n", 3 + (func() int { count := 0; if config.MemoryEnabled { count++; if config.RAGEnabled { count++ } }; if config.MCPEnabled { count++ }; return count })())
+	content += fmt.Sprintf("%d. **Deploy**: Follow the [Production Guide](https://github.com/kunalkushwaha/agentflow/blob/main/docs/guides/Production.md) for deployment\n\n", 4 + (func() int { count := 0; if config.MemoryEnabled { count++; if config.RAGEnabled { count++ } }; if config.MCPEnabled { count++ }; return count })())
+
+	content += "---\n\n"
+	content += "*Generated with ❤️ by [AgentFlow](https://github.com/kunalkushwaha/agentflow)*\n"
 
 	readmePath := filepath.Join(config.Name, "README.md")
 	if err := os.WriteFile(readmePath, []byte(content), 0644); err != nil {
@@ -160,6 +413,7 @@ func createAgentFilesWithTemplates(config ProjectConfig) error {
 
 		// Create template data structure that matches the comprehensive template
 		templateData := struct {
+			Config         ProjectConfig
 			Agent          utils.AgentInfo
 			Agents         []utils.AgentInfo
 			AgentIndex     int
@@ -171,6 +425,7 @@ func createAgentFilesWithTemplates(config ProjectConfig) error {
 			SystemPrompt   string
 			RoutingComment string
 		}{
+			Config:         config,
 			Agent:          agent,
 			Agents:         agents,
 			AgentIndex:     i,
@@ -267,7 +522,7 @@ timeout_seconds = 30
 # API key will be read from OPENAI_API_KEY environment variable
 
 [providers.ollama]
-endpoint = "http://localhost:11434"
+base_url = "http://localhost:11434"
 model = "llama2"
 
 [providers.mock]
@@ -308,6 +563,73 @@ command = "npx @modelcontextprotocol/server-brave-search"
 enabled = false
 `
 		configContent += mcpConfig
+	}
+
+	// Add memory configuration if enabled
+	if config.MemoryEnabled {
+		// Get embedding dimensions from intelligence system
+		dimensions := GetModelDimensions(config.EmbeddingProvider, config.EmbeddingModel)
+		
+		memoryConfig := fmt.Sprintf(`
+[agent_memory]
+provider = "%s"
+connection = "%s"
+max_results = %d
+dimensions = %d
+auto_embed = true
+enable_knowledge_base = true
+knowledge_max_results = %d
+knowledge_score_threshold = %.1f
+chunk_size = %d
+chunk_overlap = %d
+enable_rag = %t
+rag_max_context_tokens = 4000
+rag_personal_weight = 0.3
+rag_knowledge_weight = 0.7
+rag_include_sources = true
+
+[agent_memory.embedding]
+provider = "%s"
+model = "%s"`,
+			config.MemoryProvider,
+			getConnectionString(config.MemoryProvider),
+			config.RAGTopK,
+			dimensions,
+			config.RAGTopK,
+			config.RAGScoreThreshold,
+			config.RAGChunkSize,
+			config.RAGOverlap,
+			config.RAGEnabled,
+			config.EmbeddingProvider,
+			config.EmbeddingModel)
+
+		// Add provider-specific embedding configuration
+		if config.EmbeddingProvider == "ollama" {
+			memoryConfig += `
+base_url = "http://localhost:11434"`
+		}
+		
+		memoryConfig += `
+cache_embeddings = true
+max_batch_size = 100
+timeout_seconds = 30
+
+[agent_memory.documents]
+auto_chunk = true
+supported_types = ["pdf", "txt", "md", "web", "code"]
+max_file_size = "10MB"
+enable_metadata_extraction = true
+enable_url_scraping = true
+
+[agent_memory.search]
+hybrid_search = ` + fmt.Sprintf("%t", config.HybridSearch) + `
+keyword_weight = 0.3
+semantic_weight = 0.7
+enable_reranking = false
+enable_query_expansion = false
+`
+
+		configContent += memoryConfig
 	}
 
 	configPath := filepath.Join(config.Name, "agentflow.toml")
@@ -432,6 +754,18 @@ func generateSequentialDiagram(config ProjectConfig) (string, string) {
 	diagram += "```"
 
 	return diagram, "Sequential Pipeline"
+}
+
+// getConnectionString returns the appropriate connection string for a memory provider
+func getConnectionString(memoryProvider string) string {
+	switch memoryProvider {
+	case "pgvector":
+		return "postgres://user:password@localhost:15432/agentflow?sslmode=disable"
+	case "weaviate":
+		return "http://localhost:8080"
+	default:
+		return "memory"
+	}
 }
 
 // generateLoopDiagram creates a loop orchestration diagram

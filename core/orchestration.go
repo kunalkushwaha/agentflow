@@ -212,9 +212,15 @@ func (ob *OrchestrationBuilder) WithConfig(config OrchestrationConfig) *Orchestr
 
 // Build creates the configured runner with the specified orchestration mode
 func (ob *OrchestrationBuilder) Build() Runner {
+	// Ensure we have memory and sessionID to satisfy Runner requirements
+	memory := QuickMemory()
+	sessionID := GenerateSessionID()
+
 	return NewRunnerWithOrchestration(EnhancedRunnerConfig{
 		RunnerConfig: RunnerConfig{
-			Agents: ob.agents,
+			Agents:    ob.agents,
+			Memory:    memory,
+			SessionID: sessionID,
 		},
 		OrchestrationMode: ob.mode,
 		Config:            ob.config,

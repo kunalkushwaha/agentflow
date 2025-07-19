@@ -29,7 +29,14 @@ func TestEnhancedScaffoldGeneration(t *testing.T) {
 
 	// Test enhanced scaffold generation with error handling
 	projectName := "enhanced_test_project"
-	err = CreateAgentProject(projectName, 2, true, true, "openai")
+	config := ProjectConfig{
+		Name:          projectName,
+		NumAgents:     2,
+		Provider:      "openai",
+		ResponsibleAI: true,
+		ErrorHandler:  true,
+	}
+	err = CreateAgentProject(config)
 	if err != nil {
 		t.Fatalf("Failed to create enhanced project: %v", err)
 	}
@@ -218,7 +225,14 @@ func TestScaffoldWithoutErrorHandling(t *testing.T) {
 
 	// Test scaffold generation without error handling
 	projectName := "no_error_test_project"
-	err = CreateAgentProject(projectName, 1, false, false, "openai")
+	config := ProjectConfig{
+		Name:          projectName,
+		NumAgents:     1,
+		Provider:      "openai",
+		ResponsibleAI: false,
+		ErrorHandler:  false,
+	}
+	err = CreateAgentProject(config)
 	if err != nil {
 		t.Fatalf("Failed to create project without error handling: %v", err)
 	}
@@ -289,7 +303,14 @@ func TestEnhancedScaffoldDifferentProviders(t *testing.T) {
 
 			// Test enhanced scaffold generation with different providers
 			projectName := "enhanced_" + provider + "_project"
-			err = CreateAgentProject(projectName, 1, true, true, provider)
+			config := ProjectConfig{
+				Name:          projectName,
+				NumAgents:     1,
+				Provider:      provider,
+				ResponsibleAI: true,
+				ErrorHandler:  true,
+			}
+			err = CreateAgentProject(config)
 			if err != nil {
 				t.Fatalf("Failed to create enhanced project with %s provider: %v", provider, err)
 			}

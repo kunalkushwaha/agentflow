@@ -51,8 +51,8 @@ func NewOpenAIAdapter(apiKey, model string, maxTokens int, temperature float32) 
 }
 
 // NewOllamaAdapter creates a new Ollama adapter
-func NewOllamaAdapter(apiKey, model string, maxTokens int, temperature float32) (ModelProvider, error) {
-	adapter, err := llm.NewOllamaAdapter(apiKey, model, maxTokens, temperature)
+func NewOllamaAdapter(baseURL, model string, maxTokens int, temperature float32) (ModelProvider, error) {
+	adapter, err := llm.NewOllamaAdapter(baseURL, model, maxTokens, temperature)
 	if err != nil {
 		return nil, err
 	}
